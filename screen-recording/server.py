@@ -21,12 +21,14 @@ import mss
 from PIL import Image
 from io import BytesIO
 from discovery import discovery_key, signature
+from tls import HTTPS_CONTEXT
+from retry import retry_delay
 
 PORT = 8765
 NTFY_TOPIC = os.environ.get("DESKTOP_STREAM_TOPIC", "desktop-stream-codex-898ad5640829285844a6d528")
 USERNAME = "viewer"
 PAIR_LIFETIME = 10 * 60
-PUBLISH_EVERY = 20
+PUBLISH_EVERY = 600
 FPS = 12
 JPEG_QUALITY = 65
 MAX_WIDTH = 1600
@@ -38,6 +40,7 @@ INDICATOR_TEXT = "Your Screen Server is ON"
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 4096
 stop_event = threading.Event()
+discovery_changed = threading.Event()
 startup_messages = queue.Queue()
 tunnel_process = None
 http_server = None
@@ -156,6 +159,7 @@ def pair():
         paired = True
 
     log("Listener paired successfully. Password is now set.")
+    discovery_changed.set()
     return {"ok": True}
 
 
@@ -274,7 +278,7 @@ def publish_rendezvous(url):
             "X-Cache": "yes",
         },
     )
-    with urllib.request.urlopen(req, timeout=10) as response:
+    with urllib.request.urlopen(req, timeout=10, context=HTTPS_CONTEXT) as response:
         if response.status != 200:
             raise RuntimeError(f"ntfy returned HTTP {response.status}")
 
@@ -282,18 +286,27 @@ def publish_rendezvous(url):
 def rendezvous_loop(url):
     global pair_token, started_at
     while not stop_event.is_set():
+        discovery_changed.clear()
         if tunnel_process is not None and tunnel_process.poll() is not None:
             raise RuntimeError("Cloudflare exited; rebuilding tunnel")
         with state_lock:
-            if not paired and time.time() - started_at > PAIR_LIFETIME:
+            if not paired:
                 pair_token = secrets.token_urlsafe(32)
                 started_at = time.time()
         try:
             publish_rendezvous(url)
+            delay = PUBLISH_EVERY
             set_status("Paired; discovery available" if paired else "Ready for viewer; discovery published")
         except Exception as exc:
-            set_status(f"Discovery unavailable; retrying: {exc}")
-        stop_event.wait(PUBLISH_EVERY)
+            delay = retry_delay(exc, default=20)
+            set_status(f"Discovery unavailable; retrying in {delay}s: {exc}")
+        for _ in range((delay + 1) // 2):
+            if stop_event.wait(2):
+                return
+            if tunnel_process is not None and tunnel_process.poll() is not None:
+                raise RuntimeError("Cloudflare exited; rebuilding tunnel")
+            if discovery_changed.is_set():
+                break
 
 
 def close_tunnel():

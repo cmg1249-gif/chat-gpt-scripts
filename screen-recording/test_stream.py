@@ -1,6 +1,9 @@
 import base64
 import io
 import json
+import ssl
+import tls
+from retry import retry_delay
 import unittest
 from unittest.mock import patch
 from unittest.mock import Mock
@@ -13,11 +16,19 @@ from PIL import Image
 
 
 class StreamTests(unittest.TestCase):
+    def test_https_has_trust_without_windows_roots(self):
+        with patch.object(ssl.SSLContext, 'load_default_certs'):
+            context = tls.make_context()
+        self.assertGreater(context.cert_store_stats()['x509_ca'], 50)
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(context.check_hostname)
+
     def setUp(self):
         server.paired = False
         server.password_hash = None
         server.started_at = server.time.time()
         server.stop_event.clear()
+        server.discovery_changed.clear()
         server.tunnel_process = None
         self.client = server.app.test_client()
 
@@ -60,9 +71,29 @@ class StreamTests(unittest.TestCase):
             if len(calls) == 1:
                 raise OSError('offline')
             server.stop_event.set()
-        with patch.object(server, 'publish_rendezvous', side_effect=publish), patch.object(server.stop_event, 'wait'):
+        with patch.object(server, 'publish_rendezvous', side_effect=publish), patch.object(server.stop_event, 'wait', return_value=False):
             server.rendezvous_loop('https://example.com')
         self.assertEqual(len(calls), 2)
+
+    def test_rate_limit_backoff(self):
+        error = listener.urllib.error.HTTPError('https://example.com', 429, 'rate limited', {'Retry-After': '120'}, None)
+        self.assertEqual(retry_delay(error), 120)
+        error.headers = {}
+        self.assertEqual(retry_delay(error), 60)
+
+    def test_listener_honors_rate_limit_backoff(self):
+        error = listener.urllib.error.HTTPError('https://example.com', 429, 'rate limited', {'Retry-After': '120'}, None)
+        with patch.object(listener.urllib.request, 'urlopen', side_effect=error), patch.object(listener.time, 'sleep', side_effect=KeyboardInterrupt) as sleep:
+            with self.assertRaises(KeyboardInterrupt):
+                listener.find_session()
+        sleep.assert_called_once_with(120)
+
+    def test_dead_tunnel_detected_during_publish_wait(self):
+        server.tunnel_process = Mock()
+        server.tunnel_process.poll.side_effect = [None, 1]
+        with patch.object(server, 'publish_rendezvous'), patch.object(server.stop_event, 'wait', return_value=False):
+            with self.assertRaisesRegex(RuntimeError, 'rebuilding tunnel'):
+                server.rendezvous_loop('https://example.com')
 
     def test_paired_advertisement_omits_token(self):
         self.pair()
@@ -70,6 +101,7 @@ class StreamTests(unittest.TestCase):
             opened.return_value.__enter__.return_value.status = 200
             server.publish_rendezvous('https://example.com')
         payload = json.loads(opened.call_args.args[0].data)
+        self.assertIs(opened.call_args.kwargs['context'], tls.HTTPS_CONTEXT)
         self.assertNotIn('token', payload)
         self.assertTrue(payload['paired'])
         self.assertEqual(payload['session'], server.session_id)

@@ -4,8 +4,8 @@ This experimental proof of concept demonstrates password-paired desktop streamin
 
 ## Run
 
-1. Copy `bin/ScreenServer.exe` to the Windows PC whose screen you want to share and double-click it.
-2. Run `bin/ScreenListener.exe` on the viewing Windows PC. Choose an 8–128 character password when prompted.
+1. Copy `ScreenServer.exe` to the Windows PC whose screen you want to share and double-click it.
+2. Run `ScreenListener.exe` on the viewing Windows PC. Choose an 8–128 character password when prompted.
 3. The viewer discovers the server and opens its live desktop. Press Q or Escape, or close the video window, to stop viewing.
 4. To stop the server, right-click its green monitor icon in the Windows notification area and choose **Stop sharing**. Windows may place the icon inside the hidden-icons menu.
 
@@ -15,13 +15,19 @@ Both computers need outbound internet access to ntfy and Cloudflare. NAT does no
 
 The server retries tunnel startup and discovery failures. If the tunnel process exits, it recreates the tunnel; the listener rediscovers the same running server session using its existing password. Cloudflared handles transient transport interruptions internally. A complete server restart creates a new session and requires restarting the listener. Hover over the tray icon for connection status.
 
+Both programs include Certifi's CA bundle in addition to the operating system's trusted roots. A fresh Windows installation does not need to populate its root store before the discovery service can be verified. Certificate and hostname verification remain enabled. The system clock still needs to be accurate enough for HTTPS certificate validity checks.
+
+Routine advertisements refresh every ten minutes, with immediate updates after pairing or tunnel replacement. The listener polls a fifteen-minute cache window every five seconds while waiting. HTTP 429/503 responses use at least a sixty-second backoff and honor longer `Retry-After` delays. Tunnel-process failure is still checked every two seconds between advertisements.
+
 ## Test
 
-Double-click `bin/CheckConnection.exe` on an unlocked Windows desktop. It starts the two packaged apps, displays 12 real desktop frames locally, and stops the server after 25 seconds. Results are saved in `bin/connection-test.txt`. This check uses loopback only and does not publish your screen online.
+Double-click `CheckConnection.exe` on an unlocked Windows desktop. It starts the two packaged apps, displays 12 real desktop frames locally, and stops the server after 25 seconds. Results are saved in `connection-test.txt`. This check uses loopback only and does not publish your screen online.
 
 For an internet diagnostic, run `CheckConnection.exe --internet` from PowerShell in the extracted folder. Read `internet-test.txt` when it finishes. This tests a real Cloudflare tunnel, ntfy discovery, authenticated delivery of generated test images, and discovery after replacing the tunnel. It does not transmit desktop images. Allow up to a few minutes.
 
 Run both diagnostics on each demo machine, including the VM. Use an unlocked, logged-in Windows x64 desktop with a working display. A locked session, secure desktop, headless VM or disconnected remote desktop session is outside the tested capture path. A successful local check verifies screen capture and playback on that machine; the internet check verifies its outbound services. Finally run the server on the VM and listener on the physical PC to validate that exact pair. See `VALIDATION.md` for checks performed for this release and remaining environment coverage.
+
+A source build places its executables and diagnostic reports in the bin/ directory.
 
 ## Source and rebuild
 

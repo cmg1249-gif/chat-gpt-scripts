@@ -12,6 +12,8 @@ import urllib.request
 import cv2
 import numpy as np
 from discovery import discovery_key, signature
+from tls import HTTPS_CONTEXT
+from retry import retry_delay
 
 NTFY_TOPIC = os.environ.get("DESKTOP_STREAM_TOPIC", "desktop-stream-codex-898ad5640829285844a6d528")
 USERNAME = "viewer"
@@ -29,7 +31,7 @@ def http_json(url, method="GET", payload=None, username=None, password=None):
         headers["Authorization"] = "Basic " + base64.b64encode(raw).decode("ascii")
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    with urllib.request.urlopen(req, timeout=12) as response:
+    with urllib.request.urlopen(req, timeout=12, context=HTTPS_CONTEXT) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -39,10 +41,11 @@ def find_session(session_id=None, password=None, allow_unpaired=False):
     last_status = None
     reconnect_key = discovery_key(password, session_id) if session_id and password else None
     while True:
+        delay = 5
         # Use the service's timestamp, not the VM's possibly skewed clock.
-        url = f"https://ntfy.sh/{NTFY_TOPIC}/json?poll=1&since=90s"
+        url = f"https://ntfy.sh/{NTFY_TOPIC}/json?poll=1&since=15m"
         try:
-            with urllib.request.urlopen(url, timeout=15) as response:
+            with urllib.request.urlopen(url, timeout=15, context=HTTPS_CONTEXT) as response:
                 candidates = []
                 for line in response:
                     try:
@@ -89,11 +92,12 @@ def find_session(session_id=None, password=None, allow_unpaired=False):
                     continue
             status = "Discovery reachable; waiting for a ready server. Ctrl+C to cancel."
         except (urllib.error.URLError, TimeoutError, OSError, ValueError, TypeError) as exc:
-            status = f"Discovery request failed; retrying: {exc}"
+            delay = retry_delay(exc)
+            status = f"Discovery request failed; retrying in {delay}s: {exc}"
         if status != last_status:
             print(status, flush=True)
             last_status = status
-        time.sleep(2)
+        time.sleep(delay)
 
 
 def read_exact(resp, size):
@@ -119,7 +123,7 @@ def stream_video(base_url, password, frames=0, headless=False):
     )
 
     print("Connecting to video stream...")
-    with urllib.request.urlopen(req, timeout=20) as resp:
+    with urllib.request.urlopen(req, timeout=20, context=HTTPS_CONTEXT) as resp:
         received = 0
         buffer = b""
         boundary = b"--frame"
@@ -236,7 +240,7 @@ def main():
                     continue
                 raise SystemExit(f"Pairing rejected ({exc.code}). Restart the server to choose a new password.")
             print(f"Pairing connection unavailable; retrying: {exc}", flush=True)
-            time.sleep(2)
+            time.sleep(retry_delay(exc))
             # A request may have succeeded even if its response was lost.
             try:
                 if http_json(base_url + "/health", username=USERNAME, password=password).get("ok"):
