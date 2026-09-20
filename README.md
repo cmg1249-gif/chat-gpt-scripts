@@ -10,10 +10,10 @@ The server runs without a banner or console window and provides a system-tray co
 
 ### Validation and limitations
 
-- Six automated checks cover pairing, authentication, expiry, multipart frame parsing, and viewer cleanup.
-- The packaged server and listener streamed 12 real desktop frames at 1600×900 over loopback and shut down cleanly.
-- Cloudflare HTTPS connectivity, ntfy discovery, pairing, and authenticated health checks passed.
-- Video playback between two separate PCs has not been verified.
+- Seventeen automated checks cover pairing, authentication, retries, delayed discovery, VM clock differences, reconnect address verification, frame parsing, and viewer cleanup.
+- The release includes local capture/playback and internet connectivity diagnostics. See [validation details](screen-recording/VALIDATION.md) for the tested artifacts and environments.
+- A live internet test verifies Cloudflare, ntfy, pairing, synthetic video delivery, and rediscovery after replacing the tunnel.
+- A VM-to-physical-PC run has not been verified from this development environment; run the included diagnostics and test that pair before the demo.
 
 This is experimental software, not a production-ready remote-access product. Automatic discovery uses a shared ntfy topic containing the short-lived pairing token; anyone with access to that topic can attempt to claim an unpaired server. The repository and its paired binaries should be shared only with trusted users.
 

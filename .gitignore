@@ -8,3 +8,6 @@ bin/
 *.spec
 *-test-results.txt
 connection-test.txt
+build-output.txt
+internet-test.txt
+release-v*/

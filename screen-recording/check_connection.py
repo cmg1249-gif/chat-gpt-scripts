@@ -6,11 +6,23 @@ import subprocess
 import sys
 import tempfile
 import time
+import contextlib
 
 
 def main():
     directory = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).parent / 'bin'
     report = directory / 'connection-test.txt'
+    if '--internet' in sys.argv:
+        import test_internet
+        with (directory / 'internet-test.txt').open('w', buffering=1) as log:
+            with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
+                try:
+                    test_internet.main()
+                except Exception:
+                    import traceback
+                    traceback.print_exc()
+                    raise
+        return
     flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
     with report.open('w', buffering=1) as log, tempfile.TemporaryDirectory(prefix='screen-test-') as scratch:
         session = Path(scratch) / 'session.json'

@@ -8,6 +8,6 @@ try {
     if ($LASTEXITCODE) { throw 'Server build failed' }
     & $Python -m PyInstaller --noconfirm --onefile --name ScreenListener --distpath bin --workpath .build\listener --specpath .build listener.py
     if ($LASTEXITCODE) { throw 'Listener build failed' }
-    & $Python -m PyInstaller --noconfirm --onefile --windowed --name CheckConnection --distpath bin --workpath .build\check --specpath .build check_connection.py
+    & $Python -m PyInstaller --noconfirm --onefile --windowed --name CheckConnection --distpath bin --workpath .build\check --specpath .build --add-binary "${PSScriptRoot}\cloudflared.exe;." check_connection.py
     if ($LASTEXITCODE) { throw 'Test runner build failed' }
 } finally { Pop-Location }

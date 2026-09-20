@@ -1,4 +1,6 @@
 import argparse
+import logging
+from logging.handlers import RotatingFileHandler
 import queue
 import os
 from pathlib import Path
@@ -18,9 +20,10 @@ from flask import Flask, Response, request
 import mss
 from PIL import Image
 from io import BytesIO
+from discovery import discovery_key, signature
 
 PORT = 8765
-NTFY_TOPIC = "desktop-stream-codex-898ad5640829285844a6d528"
+NTFY_TOPIC = os.environ.get("DESKTOP_STREAM_TOPIC", "desktop-stream-codex-898ad5640829285844a6d528")
 USERNAME = "viewer"
 PAIR_LIFETIME = 10 * 60
 PUBLISH_EVERY = 20
@@ -46,9 +49,29 @@ pair_token = secrets.token_urlsafe(32)
 started_at = time.time()
 tunnel_url = None
 active_viewers = 0
+session_id = secrets.token_urlsafe(16)
+network_status = "Starting connection"
+reconnect_key = None
+logger = logging.getLogger("screen-server")
+
+
+def configure_logging():
+    directory = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "CodexScreenServer"
+    directory.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(directory / "server.log", maxBytes=1024 * 1024, backupCount=2)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+
+
+def set_status(message):
+    global network_status
+    network_status = message
+    log(message)
 
 
 def log(msg):
+    logger.info(msg)
     if sys.stdout is not None:
         print(f"[server] {msg}", flush=True)
 
@@ -106,7 +129,7 @@ def pair_info():
 
 @app.post("/pair")
 def pair():
-    global password_hash, paired
+    global password_hash, paired, reconnect_key
     data = request.get_json(silent=True) or {}
     if not isinstance(data, dict):
         return {"ok": False, "error": "JSON object required"}, 400
@@ -119,11 +142,17 @@ def pair():
         return {"ok": False, "error": "password must be 8-128 characters"}, 400
 
     with state_lock:
-        if paired or time.time() - started_at > PAIR_LIFETIME:
+        # A lost response must not prevent the same viewer retrying its request.
+        if paired:
+            if hmac.compare_digest(token.encode(), pair_token.encode()) and verify_password(password, password_hash):
+                return {"ok": True}
+            return {"ok": False, "error": "pairing closed"}, 410
+        if time.time() - started_at > PAIR_LIFETIME:
             return {"ok": False, "error": "pairing closed"}, 410
         if not hmac.compare_digest(token.encode("utf-8"), pair_token.encode("utf-8")):
             return {"ok": False, "error": "invalid pairing token"}, 403
         password_hash = hash_password(password)
+        reconnect_key = discovery_key(password, session_id)
         paired = True
 
     log("Listener paired successfully. Password is now set.")
@@ -136,7 +165,7 @@ def health():
         is_paired = paired
     if not authorized():
         return auth_required()
-    return {"ok": True, "paired": is_paired}
+    return {"ok": True, "paired": is_paired, "session": session_id}
 
 
 def capture_jpeg(sct, monitor):
@@ -195,10 +224,16 @@ def open_tunnel():
         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
-    lines = queue.Queue()
+    lines = queue.Queue(maxsize=256)
+    process = tunnel_process
     def drain():
-        for line in tunnel_process.stderr:
-            lines.put(line)
+        for line in process.stderr:
+            if " ERR " in line or " WRN " in line:
+                log("Cloudflare: " + line.strip())
+            try:
+                lines.put_nowait(line)
+            except queue.Full:
+                pass
     threading.Thread(target=drain, daemon=True).start()
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline and not stop_event.is_set():
@@ -215,12 +250,19 @@ def open_tunnel():
 
 
 def publish_rendezvous(url):
-    payload = json.dumps({
+    with state_lock:
+        details = {
         "app": "desktop-stream-v1",
         "url": url,
-        "token": pair_token,
+        "session": session_id,
+        "paired": paired,
         "created": int(time.time()),
-    })
+        }
+        if not paired:
+            details["token"] = pair_token
+        else:
+            details["signature"] = signature(details, reconnect_key)
+    payload = json.dumps(details)
     req = urllib.request.Request(
         f"https://ntfy.sh/{NTFY_TOPIC}",
         data=payload.encode("utf-8"),
@@ -238,16 +280,33 @@ def publish_rendezvous(url):
 
 
 def rendezvous_loop(url):
+    global pair_token, started_at
     while not stop_event.is_set():
+        if tunnel_process is not None and tunnel_process.poll() is not None:
+            raise RuntimeError("Cloudflare exited; rebuilding tunnel")
         with state_lock:
-            if paired or time.time() - started_at > PAIR_LIFETIME:
-                return
+            if not paired and time.time() - started_at > PAIR_LIFETIME:
+                pair_token = secrets.token_urlsafe(32)
+                started_at = time.time()
         try:
             publish_rendezvous(url)
-            log("Rendezvous info published.")
+            set_status("Paired; discovery available" if paired else "Ready for viewer; discovery published")
         except Exception as exc:
-            log(f"ntfy publish failed: {exc}")
+            set_status(f"Discovery unavailable; retrying: {exc}")
         stop_event.wait(PUBLISH_EVERY)
+
+
+def close_tunnel():
+    global tunnel_process
+    process, tunnel_process = tunnel_process, None
+    if process is not None:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
 
 
 def run_indicator(args):
@@ -298,7 +357,7 @@ def run_indicator(args):
         elif is_paired:
             status.config(text="Paired. Ready to stream.", fg="black")
         else:
-            status.config(text="Waiting for a viewer to pair...", fg="black")
+            status.config(text=network_status, fg="black")
         root.after(500, refresh)
 
     refresh()
@@ -319,13 +378,21 @@ def start_network(args):
             http_server.server_close()
             return
         threading.Thread(target=http_server.serve_forever, daemon=True).start()
-        url = f"http://127.0.0.1:{PORT}" if args.local else open_tunnel()
-        log(f"Server URL: {url}")
-        log(f"Pairing token: {pair_token}")
-        if args.session_file:
-            Path(args.session_file).write_text(json.dumps({"url": url, "token": pair_token}))
-        if not args.local:
-            rendezvous_loop(url)
+        while not stop_event.is_set():
+            try:
+                set_status("Connecting tunnel" if not args.local else "Local test ready")
+                url = f"http://127.0.0.1:{PORT}" if args.local else open_tunnel()
+                if args.session_file:
+                    Path(args.session_file).write_text(json.dumps({"url": url, "token": pair_token}))
+                if args.local:
+                    return
+                rendezvous_loop(url)
+            except Exception as exc:
+                set_status(f"Connection unavailable; retrying in 5 seconds: {exc}")
+            finally:
+                if not args.local:
+                    close_tunnel()
+            stop_event.wait(5)
     except Exception as exc:
         log(f"Startup failed: {exc}")
         startup_messages.put(f"ERROR: {exc}")
@@ -355,6 +422,7 @@ def run_tray(args):
             timer.daemon = True
             timer.start()
         while not stop_event.wait(0.5):
+            tray.title = ("LIVE - screen sharing" if active_viewers else network_status)[:127]
             try:
                 message = startup_messages.get_nowait()
             except queue.Empty:
@@ -369,6 +437,7 @@ def run_tray(args):
 
 
 def run_server():
+    configure_logging()
     parser = argparse.ArgumentParser(description="Desktop sharing server with system-tray stop control")
     parser.add_argument("--local", action="store_true", help="Loopback only; no internet services")
     parser.add_argument("--port", type=int, default=8766)
@@ -383,12 +452,7 @@ def run_server():
             run_tray(args)
     finally:
         stop_event.set()
-        if tunnel_process is not None:
-            tunnel_process.terminate()
-            try:
-                tunnel_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                tunnel_process.kill()
+        close_tunnel()
         if http_server is not None:
             http_server.shutdown()
             http_server.server_close()

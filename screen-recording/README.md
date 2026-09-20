@@ -11,13 +11,17 @@ This experimental proof of concept demonstrates password-paired desktop streamin
 
 The server has **no banner and no console window** by default. Its only UI is the tray icon. It does not install a startup task. Python is bundled into each executable; no Python installation is required on the destination PC. Cloudflare is bundled into the server.
 
-Both computers need internet access for automatic discovery and Cloudflare tunneling. Start the listener within ten minutes of starting the server. Restart the server to pair a new viewer or change the password. This build has a separate discovery topic and uses local port 8766, so use this server and listener together rather than mixing them with another copy.
+Both computers need outbound internet access to ntfy and Cloudflare. NAT does not require inbound port forwarding. Use the matching v0.1.1 server and listener. Start either first: the listener keeps waiting, and the server renews unclaimed pairing tokens instead of becoming permanently undiscoverable after ten minutes. Restart the server to choose a different password or pair a different viewer. One server per demo is recommended because automatic discovery uses a shared topic. Advanced users can set the same `DESKTOP_STREAM_TOPIC` environment variable on both machines to isolate concurrent demos.
+
+The server retries tunnel startup and discovery failures. If the tunnel process exits, it recreates the tunnel; the listener rediscovers the same running server session using its existing password. Cloudflared handles transient transport interruptions internally. A complete server restart creates a new session and requires restarting the listener. Hover over the tray icon for connection status.
 
 ## Test
 
 Double-click `bin/CheckConnection.exe` on an unlocked Windows desktop. It starts the two packaged apps, displays 12 real desktop frames locally, and stops the server after 25 seconds. Results are saved in `bin/connection-test.txt`. This check uses loopback only and does not publish your screen online.
 
-`unit-test-results.txt` records six automated protocol/authentication checks. The framing check uses a synthetic JPEG; the executable integration test uses actual desktop capture. `internet-test-results.txt` records a successful Cloudflare HTTPS connection, ntfy discovery, pairing, and authenticated health request. Internet video playback between two separate PCs has not been tested here.
+For an internet diagnostic, run `CheckConnection.exe --internet` from PowerShell in the extracted folder. Read `internet-test.txt` when it finishes. This tests a real Cloudflare tunnel, ntfy discovery, authenticated delivery of generated test images, and discovery after replacing the tunnel. It does not transmit desktop images. Allow up to a few minutes.
+
+Run both diagnostics on each demo machine, including the VM. Use an unlocked, logged-in Windows x64 desktop with a working display. A locked session, secure desktop, headless VM or disconnected remote desktop session is outside the tested capture path. A successful local check verifies screen capture and playback on that machine; the internet check verifies its outbound services. Finally run the server on the VM and listener on the physical PC to validate that exact pair. See `VALIDATION.md` for checks performed for this release and remaining environment coverage.
 
 ## Source and rebuild
 
@@ -25,7 +29,5 @@ Use Python 3.12 on Windows x64. In your own virtual environment, install `requir
 
 The server supports `--local`, `--port`, and optional `--show-banner`. Use `--session-file` and `--stop-after` for local testing. The listener supports `--session-file`, `--frames`, and `--headless` for repeatable integration checks.
 
-Startup failures in tray mode are written to `%LOCALAPPDATA%\CodexScreenServer\last-error.txt`.
-
-The requested Ducky Cam Room GitHub comparison is pending the repository URL; this copy is based on the supplied Python files.
+Connection progress and failures are recorded in `%LOCALAPPDATA%\CodexScreenServer\server.log`, with two rotated backups. Fatal startup failures in tray mode also write `last-error.txt`. Transient failures stay running and retry; the listener prints discovery errors instead of hiding them. Service outages, firewall restrictions and service rate limits still affect availability.
 

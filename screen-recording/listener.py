@@ -2,6 +2,7 @@ import argparse
 import os
 import base64
 import getpass
+import hmac
 import json
 import time
 import urllib.error
@@ -10,10 +11,11 @@ import urllib.request
 
 import cv2
 import numpy as np
+from discovery import discovery_key, signature
 
-NTFY_TOPIC = "desktop-stream-codex-898ad5640829285844a6d528"
+NTFY_TOPIC = os.environ.get("DESKTOP_STREAM_TOPIC", "desktop-stream-codex-898ad5640829285844a6d528")
 USERNAME = "viewer"
-LOOK_FOR_SECONDS = 300
+current_session = None
 
 
 def http_json(url, method="GET", payload=None, username=None, password=None):
@@ -31,39 +33,67 @@ def http_json(url, method="GET", payload=None, username=None, password=None):
         return json.loads(response.read().decode("utf-8"))
 
 
-def find_session():
+def find_session(session_id=None, password=None, allow_unpaired=False):
+    global current_session
     print("Waiting for a server advertisement...")
-    deadline = time.time() + LOOK_FOR_SECONDS
-    seen = None
-
-    while time.time() < deadline:
-        url = f"https://ntfy.sh/{NTFY_TOPIC}/json?poll=1&since=latest"
+    last_status = None
+    reconnect_key = discovery_key(password, session_id) if session_id and password else None
+    while True:
+        # Use the service's timestamp, not the VM's possibly skewed clock.
+        url = f"https://ntfy.sh/{NTFY_TOPIC}/json?poll=1&since=90s"
         try:
             with urllib.request.urlopen(url, timeout=15) as response:
+                candidates = []
                 for line in response:
                     try:
                         msg = json.loads(line.decode("utf-8"))
-                    except json.JSONDecodeError:
+                        if not isinstance(msg, dict) or msg.get("event") != "message":
+                            continue
+                        payload = json.loads(msg.get("message", "{}"))
+                    except (ValueError, TypeError):
                         continue
-                    if msg.get("event") != "message":
-                        continue
-                    if msg.get("id") == seen:
-                        continue
-                    seen = msg.get("id")
-                    payload = json.loads(msg.get("message", "{}"))
                     if not isinstance(payload, dict):
                         continue
                     if payload.get("app") != "desktop-stream-v1":
                         continue
-                    if time.time() - int(payload.get("created", 0)) > 90:
+                    if session_id and payload.get("session") != session_id:
                         continue
-                    if payload.get("url") and payload.get("token"):
-                        return payload["url"].rstrip("/"), payload["token"]
-        except (urllib.error.URLError, TimeoutError, OSError, ValueError, TypeError):
-            pass
+                    if session_id and not payload.get("paired") and not allow_unpaired:
+                        continue
+                    if not session_id and (payload.get("paired") or not isinstance(payload.get("token"), str)):
+                        continue
+                    base_url = payload.get("url")
+                    if not isinstance(base_url, str) or urllib.parse.urlparse(base_url).scheme != "https":
+                        continue
+                    candidates.append(payload)
+            tried_urls = set()
+            for payload in reversed(candidates):
+                if payload['url'] in tried_urls:
+                    continue
+                tried_urls.add(payload['url'])
+                try:
+                    if session_id and payload.get('paired'):
+                        signed = payload.get('signature')
+                        if reconnect_key is None or not isinstance(signed, str) or not hmac.compare_digest(signed, signature(payload, reconnect_key)):
+                            continue
+                        info = http_json(payload['url'].rstrip('/') + '/health', username=USERNAME, password=password)
+                        if not info.get('ok') or info.get('session') != session_id:
+                            continue
+                    else:
+                        info = http_json(payload["url"].rstrip("/") + "/pair-info")
+                        if not info.get("pairing"):
+                            continue
+                    current_session = payload.get("session")
+                    return payload["url"].rstrip("/"), payload.get("token")
+                except (urllib.error.URLError, OSError, ValueError):
+                    continue
+            status = "Discovery reachable; waiting for a ready server. Ctrl+C to cancel."
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError, TypeError) as exc:
+            status = f"Discovery request failed; retrying: {exc}"
+        if status != last_status:
+            print(status, flush=True)
+            last_status = status
         time.sleep(2)
-
-    raise TimeoutError("No live server advertisement was found.")
 
 
 def read_exact(resp, size):
@@ -167,9 +197,14 @@ def main():
         parser.error("--headless requires --frames greater than zero")
     print("=== Desktop Stream Listener ===")
     print("The listener chooses the password; the server never asks you to edit config.")
-    password = os.environ.get("DESKTOP_STREAM_TEST_PASSWORD") or getpass.getpass("Set stream password (8-128 chars): ")
-    if not 8 <= len(password) <= 128:
-        raise SystemExit("Password must be 8-128 characters.")
+    print("Choose an 8-128 character password; hidden input works best in a terminal.", flush=True)
+    password = os.environ.get("DESKTOP_STREAM_TEST_PASSWORD")
+    while password is None or not 8 <= len(password) <= 128:
+        if password is not None:
+            if os.environ.get("DESKTOP_STREAM_TEST_PASSWORD"):
+                raise SystemExit("Test password must be 8-128 characters.")
+            print("Password must be 8-128 characters. Try again.", flush=True)
+        password = getpass.getpass("Set stream password: ")
 
     if args.session_file:
         with open(args.session_file) as f:
@@ -185,15 +220,34 @@ def main():
     print(f"Found server: {base_url}")
     print("Pairing...")
 
-    try:
-        result = http_json(
-            base_url + "/pair",
-            method="POST",
-            payload={"token": token, "password": password},
-        )
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        raise SystemExit(f"Pairing failed ({exc.code}): {body}")
+    while True:
+        try:
+            result = http_json(
+                base_url + "/pair", method="POST",
+                payload={"token": token, "password": password},
+            )
+            break
+        except (urllib.error.URLError, OSError) as exc:
+            if isinstance(exc, urllib.error.HTTPError) and exc.code in (400, 401, 403, 410):
+                if not (args.url or args.session_file) and exc.code in (403, 410):
+                    print("Advertisement expired or already claimed; looking again.")
+                    time.sleep(2)
+                    base_url, token = find_session()
+                    continue
+                raise SystemExit(f"Pairing rejected ({exc.code}). Restart the server to choose a new password.")
+            print(f"Pairing connection unavailable; retrying: {exc}", flush=True)
+            time.sleep(2)
+            # A request may have succeeded even if its response was lost.
+            try:
+                if http_json(base_url + "/health", username=USERNAME, password=password).get("ok"):
+                    result = {"ok": True}
+                    break
+            except (urllib.error.URLError, OSError, ValueError):
+                pass
+            if current_session and not (args.url or args.session_file):
+                base_url, fresh_token = find_session(current_session, password, allow_unpaired=True)
+                if fresh_token:
+                    token = fresh_token
 
     if not result.get("ok"):
         raise SystemExit(f"Pairing failed: {result}")
@@ -213,6 +267,8 @@ def main():
             print(f"Connection lost: {exc}")
             print("Reconnecting in 2 seconds...")
             time.sleep(2)
+            if current_session and not (args.url or args.session_file):
+                base_url, _ = find_session(current_session, password)
 
     cv2.destroyAllWindows()
 
