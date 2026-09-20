@@ -23,6 +23,7 @@ from io import BytesIO
 from discovery import discovery_key, signature
 from tls import HTTPS_CONTEXT
 from retry import retry_delay
+from desktop_audio import AudioHub, LoopbackCapture, audio_info
 
 PORT = 8765
 NTFY_TOPIC = os.environ.get("DESKTOP_STREAM_TOPIC", "desktop-stream-codex-898ad5640829285844a6d528")
@@ -52,6 +53,8 @@ pair_token = secrets.token_urlsafe(32)
 started_at = time.time()
 tunnel_url = None
 active_viewers = 0
+active_audio_viewers = 0
+audio_hub = AudioHub()
 session_id = secrets.token_urlsafe(16)
 network_status = "Starting connection"
 reconnect_key = None
@@ -185,10 +188,77 @@ def capture_jpeg(sct, monitor):
     return buf.getvalue()
 
 
+def list_monitors():
+    with mss.MSS() as sct:
+        return [dict(id=index, name=monitor.get('name', f'Monitor {index}'),
+                     width=monitor['width'], height=monitor['height'],
+                     left=monitor['left'], top=monitor['top'],
+                     primary=bool(monitor.get('is_primary', index == 1)))
+                for index, monitor in enumerate(sct.monitors[1:], 1)]
+
+
+@app.get('/monitors')
+def monitors():
+    if not authorized():
+        return auth_required()
+    return {'monitors': list_monitors()}
+
+
+@app.get('/audio-info')
+def desktop_audio_info():
+    if not authorized():
+        return auth_required()
+    try:
+        return audio_info()
+    except (OSError, ValueError, RuntimeError) as exc:
+        return {'available': False, 'error': str(exc)}
+
+
+@app.get('/audio')
+def audio():
+    if not authorized():
+        return auth_required()
+    try:
+        capture = audio_hub.subscribe(LoopbackCapture)
+    except (OSError, ValueError, RuntimeError) as exc:
+        log(f'Desktop audio unavailable: {exc}')
+        return {'error': str(exc)}, 503
+
+    def generate():
+        global active_audio_viewers
+        with state_lock:
+            active_audio_viewers += 1
+        try:
+            while not stop_event.is_set():
+                chunk = capture.read()
+                if not chunk:
+                    return
+                yield chunk
+        finally:
+            capture.close()
+            with state_lock:
+                active_audio_viewers -= 1
+
+    response = Response(generate(), mimetype='application/octet-stream', headers={
+        'X-Audio-Sample-Rate': str(capture.sample_rate), 'X-Audio-Channels': '2',
+        'X-Audio-Format': 's16le', 'Cache-Control': 'no-store, no-transform',
+        'X-Accel-Buffering': 'no',
+    })
+    response.call_on_close(capture.close)
+    return response
+
+
 @app.get("/video")
 def video():
     if not authorized():
         return auth_required()
+    try:
+        monitor_id = int(request.args.get('monitor', '1'))
+    except ValueError:
+        return {'error': 'monitor must be a number'}, 400
+    available = list_monitors()
+    if not 1 <= monitor_id <= len(available):
+        return {'error': 'Monitor is unavailable; refresh the monitor list.'}, 404
 
     def generate():
         global active_viewers
@@ -196,8 +266,10 @@ def video():
             active_viewers += 1
         try:
             interval = 1.0 / FPS
-            with mss.mss() as sct:
-                monitor = sct.monitors[1]
+            with mss.MSS() as sct:
+                if monitor_id >= len(sct.monitors):
+                    return
+                monitor = sct.monitors[monitor_id]
                 while not stop_event.is_set():
                     started = time.monotonic()
                     jpeg = capture_jpeg(sct, monitor)
@@ -212,7 +284,7 @@ def video():
     return Response(
         generate(),
         mimetype="multipart/x-mixed-replace; boundary=frame",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", 'X-Monitor-Id': str(monitor_id)},
     )
 
 
@@ -365,8 +437,8 @@ def run_indicator(args):
         with state_lock:
             is_paired = paired
             viewers = active_viewers
-        if viewers > 0:
-            status.config(text="LIVE - your screen is being shared right now", fg="#c0392b")
+        if viewers > 0 or active_audio_viewers > 0:
+            status.config(text="LIVE - screen / desktop audio sharing", fg="#c0392b")
         elif is_paired:
             status.config(text="Paired. Ready to stream.", fg="black")
         else:
@@ -435,7 +507,7 @@ def run_tray(args):
             timer.daemon = True
             timer.start()
         while not stop_event.wait(0.5):
-            tray.title = ("LIVE - screen sharing" if active_viewers else network_status)[:127]
+            tray.title = ("LIVE - screen / desktop audio sharing" if active_viewers or active_audio_viewers else network_status)[:127]
             try:
                 message = startup_messages.get_nowait()
             except queue.Empty:
@@ -465,6 +537,7 @@ def run_server():
             run_tray(args)
     finally:
         stop_event.set()
+        audio_hub.close()
         close_tunnel()
         if http_server is not None:
             http_server.shutdown()

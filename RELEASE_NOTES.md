@@ -1,4 +1,18 @@
-# v0.1.1 — Discovery and reconnection fixes
+# v0.2.0 — Desktop audio and monitor selection
+
+The viewer now plays the sharing computer's default speaker output and provides a monitor selector, display refresh, and a desktop-audio mute control. Missing audio hardware is reported without interrupting video. Audio uses Windows WASAPI speaker loopback; microphones are not captured.
+
+Audio connections share one device capture with independent bounded buffers. This avoids reopening the virtual sound card while an earlier tunnel request is still closing. Device failures reach the viewer and can be retried without stopping video.
+
+Use the matching server and listener from this release. Stop the old server through **Stop sharing** in its tray menu before replacing it. Close the viewer with Escape or its window close button. For same-PC viewing, start with `ScreenListener.exe --mute` to prevent audio feedback.
+
+`CheckConnection.exe --media` tests connected displays, monitor switching, and speaker capture with a quiet test tone. Run it from a writable extracted folder and read `media-test.txt`. The internet diagnostic now checks generated audio as well as video before and after tunnel replacement.
+
+Thirty-four automated checks pass. Packaged tests on the physical Windows PC decoded both actual monitors (2560×1440 and 1920×1080), switched the viewer between them, exercised mute controls, and detected a known tone through actual WASAPI capture and authenticated transport. The public tunnel test delivered generated stereo audio and video before and after replacing the tunnel. See `VALIDATION.md` for VM coverage.
+
+Audio and video are separate streams without precise lip synchronization. Audio requires a working Windows playback device in the sharing computer or guest VM. The existing PoC discovery and service-availability limitations below still apply.
+
+## v0.1.1 — Discovery and reconnection fixes
 
 The server no longer becomes permanently undiscoverable when its initial ten-minute pairing window expires. It renews unclaimed tokens, retries discovery and tunnel startup failures, and recreates the tunnel if its process exits. The viewer waits for a reachable server, reports network errors, and rediscovers the same session after a tunnel replacement. Reconnect advertisements are authenticated before credentials are sent. Repeating a successful pairing request with the same token and password is safe when its original response was lost.
 

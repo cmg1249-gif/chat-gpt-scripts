@@ -112,10 +112,11 @@ def read_exact(resp, size):
     return b"".join(chunks)
 
 
-def stream_video(base_url, password, frames=0, headless=False):
+def stream_video(base_url, password, frames=0, headless=False, monitor=1,
+                 frame_callback=None, should_stop=None):
     auth = base64.b64encode(f"{USERNAME}:{password}".encode()).decode()
     req = urllib.request.Request(
-        base_url + "/video",
+        base_url + f"/video?monitor={monitor}",
         headers={
             "Authorization": f"Basic {auth}",
             "User-Agent": "desktop-stream-listener/1.0",
@@ -129,6 +130,8 @@ def stream_video(base_url, password, frames=0, headless=False):
         boundary = b"--frame"
 
         while True:
+            if should_stop and should_stop():
+                return
             chunk = resp.read1(65536)
             if not chunk:
                 raise ConnectionError("stream ended")
@@ -176,11 +179,16 @@ def stream_video(base_url, password, frames=0, headless=False):
                 frame = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
                 if frame is None:
                     continue
+                if should_stop and should_stop():
+                    return
 
                 received += 1
                 if frames and received >= frames:
                     print(f"PASS: decoded {received} live frames ({frame.shape[1]}x{frame.shape[0]})", flush=True)
                     return
+                if frame_callback:
+                    frame_callback(frame)
+                    continue
                 if headless:
                     continue
                 cv2.imshow("Desktop Stream", frame)
@@ -196,9 +204,14 @@ def main():
     parser.add_argument("--session-file", help="Read local test connection details")
     parser.add_argument("--frames", type=int, default=0, help="Exit after decoding N frames")
     parser.add_argument("--headless", action="store_true", help="Decode without displaying (test mode)")
+    parser.add_argument('--monitor', type=int, default=1, help='Initial monitor number (1-based)')
+    parser.add_argument('--list-monitors', action='store_true', help='List remote monitors and exit')
+    parser.add_argument('--mute', action='store_true', help='Start with desktop audio muted')
     args = parser.parse_args()
     if args.headless and args.frames <= 0:
         parser.error("--headless requires --frames greater than zero")
+    if args.monitor < 1:
+        parser.error('--monitor must be at least 1')
     print("=== Desktop Stream Listener ===")
     print("The listener chooses the password; the server never asks you to edit config.")
     print("Choose an 8-128 character password; hidden input works best in a terminal.", flush=True)
@@ -257,11 +270,19 @@ def main():
         raise SystemExit(f"Pairing failed: {result}")
 
     print("Paired. Opening live desktop.")
+    if args.list_monitors:
+        print(json.dumps(http_json(base_url + '/monitors', username=USERNAME, password=password), indent=2))
+        return
+    if not args.frames:
+        from viewer import DesktopViewer
+        DesktopViewer(base_url, password, current_session, http_json, find_session,
+                      stream_video, monitor=args.monitor, muted=args.mute).run()
+        return
     print("Press Q or Esc in the video window to quit.")
 
     while True:
         try:
-            stream_video(base_url, password, args.frames, args.headless)
+            stream_video(base_url, password, args.frames, args.headless, monitor=args.monitor)
             break
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ConnectionError, OSError) as exc:
             if args.frames:

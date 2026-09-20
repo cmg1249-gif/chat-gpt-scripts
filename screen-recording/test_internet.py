@@ -6,9 +6,31 @@ import time
 from unittest.mock import patch
 
 from PIL import Image, ImageDraw
+import numpy as np
 from werkzeug.serving import make_server
 import listener
 import server
+from test_media import verify_audio
+
+
+class SyntheticAudio:
+    sample_rate = 48000
+    channels = 2
+
+    def __init__(self):
+        self.position = 0
+        self.closed = False
+
+    def read(self):
+        if self.closed or server.stop_event.wait(0.02):
+            return b''
+        times = np.arange(self.position, self.position + 960) / self.sample_rate
+        self.position += 960
+        samples = (1500 * np.sin(2 * np.pi * 997 * times)).astype('<i2')
+        return np.repeat(samples[:, None], 2, axis=1).tobytes()
+
+    def close(self):
+        self.closed = True
 
 
 def main():
@@ -40,7 +62,7 @@ def main():
 
     try:
         print('Testing public tunnel and discovery with synthetic frames only.', flush=True)
-        with patch.object(server, 'capture_jpeg', return_value=output.getvalue()), patch.object(listener.time, 'sleep', side_effect=bounded_sleep):
+        with patch.object(server, 'capture_jpeg', return_value=output.getvalue()), patch.object(server, 'LoopbackCapture', SyntheticAudio), patch.object(listener.time, 'sleep', side_effect=bounded_sleep):
             for iteration in range(2):
                 url = server.open_tunnel()
                 # A new Quick Tunnel hostname can need time for DNS/edge readiness.
@@ -65,9 +87,10 @@ def main():
                     if not response.get('ok'):
                         raise RuntimeError('Pairing failed')
                 listener.stream_video(found, password, frames=12, headless=True)
+                verify_audio(found, password, expect_test_tone=True)
                 print('PASS: ' + ('new tunnel rediscovered with existing credentials' if iteration else 'public discovery, pairing and 12 decoded test frames'), flush=True)
                 server.close_tunnel()
-        print('PASS: internet check complete; no desktop images were transmitted.', flush=True)
+        print('PASS: internet check complete; only generated video and audio were transmitted.', flush=True)
     finally:
         timer.cancel()
         server.stop_event.set()

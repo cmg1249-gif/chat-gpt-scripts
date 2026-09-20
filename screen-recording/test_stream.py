@@ -2,7 +2,13 @@ import base64
 import io
 import json
 import ssl
+import queue
+import threading
 import tls
+import numpy as np
+import desktop_audio
+from viewer import audio_format
+import viewer
 from retry import retry_delay
 import unittest
 from unittest.mock import patch
@@ -30,6 +36,8 @@ class StreamTests(unittest.TestCase):
         server.stop_event.clear()
         server.discovery_changed.clear()
         server.tunnel_process = None
+        server.audio_hub = desktop_audio.AudioHub()
+        self.addCleanup(server.audio_hub.close)
         self.client = server.app.test_client()
 
     def pair(self):
@@ -169,6 +177,151 @@ class StreamTests(unittest.TestCase):
         self.pair()
         headers = {'Authorization': 'Basic ' + base64.b64encode(b'viewer:incorrect').decode()}
         self.assertEqual(self.client.get('/health', headers=headers).status_code, 401)
+
+    def test_media_endpoints_require_authentication(self):
+        for endpoint in ('/monitors', '/audio-info', '/audio'):
+            self.assertEqual(self.client.get(endpoint).status_code, 401)
+
+    def test_monitor_list_and_invalid_selection(self):
+        self.pair()
+        monitors = [{'id': 1, 'name': 'First'}, {'id': 2, 'name': 'Second'}]
+        with patch.object(server, 'list_monitors', return_value=monitors):
+            self.assertEqual(self.client.get('/monitors', headers=self.auth()).json['monitors'], monitors)
+            self.assertEqual(self.client.get('/video?monitor=abc', headers=self.auth()).status_code, 400)
+            for index in (0, -1, 3):
+                self.assertEqual(self.client.get(f'/video?monitor={index}', headers=self.auth()).status_code, 404)
+
+    def test_second_monitor_is_captured(self):
+        self.pair()
+        fixture = io.BytesIO()
+        Image.new('RGB', (32, 24), 'green').save(fixture, 'JPEG')
+        displays = [{}, {'left': 0}, {'left': -1920}]
+        with patch.object(server, 'list_monitors', return_value=[{'id': 1}, {'id': 2}]), patch.object(server.mss, 'MSS') as factory, patch.object(server, 'capture_jpeg', return_value=fixture.getvalue()) as capture:
+            factory.return_value.__enter__.return_value.monitors = displays
+            response = self.client.get('/video?monitor=2', headers=self.auth(), buffered=False)
+            self.assertEqual(response.headers['X-Monitor-Id'], '2')
+            capture.assert_called_with(factory.return_value.__enter__.return_value, displays[2])
+            response.close()
+
+    def test_audio_unavailable_keeps_video_service_alive(self):
+        self.pair()
+        with patch.object(server, 'audio_info', side_effect=desktop_audio.AudioUnavailable('No speakers')), patch.object(server, 'LoopbackCapture', side_effect=desktop_audio.AudioUnavailable('No speakers')):
+            self.assertFalse(self.client.get('/audio-info', headers=self.auth()).json['available'])
+            self.assertEqual(self.client.get('/audio', headers=self.auth()).status_code, 503)
+        self.assertEqual(self.client.get('/health', headers=self.auth()).status_code, 200)
+
+    def test_audio_stream_headers_and_cleanup(self):
+        self.pair()
+        capture = Mock(sample_rate=48000)
+        capture.read.return_value = b'\x00\x01\x00\x01' * 512
+        with patch.object(server, 'LoopbackCapture', return_value=capture):
+            response = self.client.get('/audio', headers=self.auth(), buffered=False)
+            self.assertEqual(response.headers['X-Audio-Format'], 's16le')
+            self.assertEqual(response.headers['X-Audio-Channels'], '2')
+            self.assertEqual(server.active_audio_viewers, 1)
+            self.assertEqual(len(next(iter(response.response))), 2048)
+            response.close()
+        self.assertEqual(server.active_audio_viewers, 0)
+        server.audio_hub.close()
+        self.assertTrue(capture.close.called)
+
+    def test_audio_reconnections_share_one_capture(self):
+        capture = Mock(sample_rate=48000)
+        tick = threading.Event()
+        capture.read.side_effect = lambda: (tick.wait(0.005), b'pcm')[1]
+        factory = Mock(return_value=capture)
+        first = server.audio_hub.subscribe(factory)
+        second = server.audio_hub.subscribe(factory)
+        self.assertEqual(first.read(), b'pcm')
+        self.assertEqual(second.read(), b'pcm')
+        first.close()
+        second.close()
+        third = server.audio_hub.subscribe(factory)
+        self.assertEqual(third.read(), b'pcm')
+        third.close()
+        factory.assert_called_once()
+        capture.close.assert_not_called()
+        server.audio_hub.close()
+        capture.close.assert_called_once()
+
+    def test_audio_hub_device_failure_can_recover(self):
+        factory = Mock(side_effect=desktop_audio.AudioUnavailable('device gone'))
+        with self.assertRaises(desktop_audio.AudioUnavailable):
+            server.audio_hub.subscribe(factory)
+        server.audio_hub.thread.join(timeout=1)
+        capture = Mock(sample_rate=44100)
+        tick = threading.Event()
+        capture.read.side_effect = lambda: (tick.wait(0.005), b'new')[1]
+        recovered = server.audio_hub.subscribe(lambda: capture)
+        self.assertEqual(recovered.read(), b'new')
+        recovered.close()
+
+    def test_microphone_is_never_used_as_loopback(self):
+        manager = Mock()
+        manager.get_default_wasapi_loopback.return_value = {'isLoopbackDevice': False, 'maxInputChannels': 2}
+        with self.assertRaises(desktop_audio.AudioUnavailable):
+            desktop_audio.default_loopback(manager)
+        manager.open.assert_not_called()
+
+    def test_audio_channel_conversion(self):
+        mono = np.array([1, -2, 300], dtype='<i2')
+        stereo = np.frombuffer(desktop_audio.stereo_pcm(mono.tobytes(), 1), dtype='<i2').reshape(-1, 2)
+        np.testing.assert_array_equal(stereo[:, 0], mono)
+        np.testing.assert_array_equal(stereo[:, 1], mono)
+        self.assertEqual(desktop_audio.stereo_pcm(stereo.tobytes(), 2), stereo.tobytes())
+        surround = np.full((2, 6), 32000, dtype='<i2')
+        mixed = np.frombuffer(desktop_audio.stereo_pcm(surround.tobytes(), 6), dtype='<i2')
+        self.assertTrue(np.all(mixed == 32767))
+
+    def test_audio_format_validation(self):
+        self.assertEqual(audio_format({'X-Audio-Sample-Rate': '48000', 'X-Audio-Channels': '2', 'X-Audio-Format': 's16le'}), (48000, 2))
+        for headers in ({}, {'X-Audio-Sample-Rate': '999999', 'X-Audio-Channels': '2', 'X-Audio-Format': 's16le'}):
+            with self.assertRaises(ValueError):
+                audio_format(headers)
+
+    def test_muted_viewer_does_not_request_audio(self):
+        instance = viewer.DesktopViewer.__new__(viewer.DesktopViewer)
+        instance.password = 'testing-password'
+        instance.muted = True
+        instance.stop = threading.Event()
+        instance.http = Mock()
+        with patch.object(instance.stop, 'wait', side_effect=lambda delay: instance.stop.set()), patch.object(viewer, 'AudioOutput') as output:
+            instance.audio_worker()
+        instance.http.assert_not_called()
+        output.assert_not_called()
+
+    def test_viewer_audio_delivers_pcm_and_closes_on_mute(self):
+        instance = viewer.DesktopViewer.__new__(viewer.DesktopViewer)
+        instance.password = 'testing-password'
+        instance.muted = False
+        instance.stop = threading.Event()
+        instance.base_url = 'https://example.com'
+        instance.http = Mock(return_value={'available': True})
+        instance.messages = queue.Queue()
+        data = b'\x01\x00\x02\x00' * 128
+        response = io.BytesIO(data)
+        response.headers = {'X-Audio-Sample-Rate': '48000', 'X-Audio-Channels': '2', 'X-Audio-Format': 's16le'}
+        def mute(chunk):
+            instance.muted = True
+            instance.stop.set()
+        with patch.object(viewer.urllib.request, 'urlopen', return_value=response), patch.object(viewer, 'AudioOutput') as output:
+            output.return_value.write.side_effect = mute
+            instance.audio_worker()
+            output.return_value.write.assert_called_once_with(data)
+            output.return_value.close.assert_called_once()
+
+    def test_audio_failure_does_not_stop_viewer(self):
+        instance = viewer.DesktopViewer.__new__(viewer.DesktopViewer)
+        instance.password = 'testing-password'
+        instance.muted = False
+        instance.stop = threading.Event()
+        instance.base_url = 'https://example.com'
+        instance.http = Mock(return_value={'available': False, 'error': 'No speakers'})
+        instance.messages = queue.Queue()
+        with patch.object(instance.stop, 'wait', side_effect=lambda delay: instance.stop.set()), patch.object(viewer, 'AudioOutput') as output:
+            instance.audio_worker()
+            output.assert_not_called()
+        self.assertIn('No speakers', instance.messages.get_nowait()[1])
 
     def test_stream_framing_and_viewer_cleanup(self):
         self.pair()

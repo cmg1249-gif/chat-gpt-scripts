@@ -12,6 +12,17 @@ import contextlib
 def main():
     directory = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).parent / 'bin'
     report = directory / 'connection-test.txt'
+    if '--media' in sys.argv:
+        import test_media
+        with (directory / 'media-test.txt').open('w', buffering=1) as log:
+            with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
+                try:
+                    test_media.main()
+                except Exception:
+                    import traceback
+                    traceback.print_exc()
+                    raise
+        return
     if '--internet' in sys.argv:
         import test_internet
         with (directory / 'internet-test.txt').open('w', buffering=1) as log:
