@@ -1,3 +1,15 @@
+# v2.0.1 validation — 2026-09-20
+
+- 26 source regression tests passed, including changing capture dimensions from 640×480 to 800×600 without restarting the stream and exact pixel preservation through the FFV1 recording intermediate.
+- A packaged test exposed identical timestamps after audio-worker delays. Scheduling now skips overdue deadlines instead of emitting immediate catch-up packets; a deterministic delayed-worker regression test covers it.
+- Final packaged regression runner passed all 26 tests. Final packaged local check passed 12 frames on each of two physical monitors at 1920×1080, 997 Hz speaker tone detection, three audio reopens, and packaged viewer decoding.
+- Final packaged internet diagnostic passed generated video/audio and signed discovery before and after replacing the tunnel.
+- Generated 1920×1080 text-image comparison: old 1600/quality-70 settings produced 128751-byte frames and 25.72 dB PSNR after restoring display size; new 1920/quality-85 settings produced 232869-byte frames and 41.29 dB PSNR. This is one synthetic image, not a general bandwidth guarantee.
+- The user's supplied recording is nine frames, approximately 0.56 seconds, at 958×946. It shows two taskbars. Whether the guest resized during capture is unknown; the exact visual symptom has not been reproduced on this build.
+- VM end-to-end results below apply to v2.0.0. A live guest-resize verification remains outstanding for v2.0.1.
+
+## Previous release validation
+
 # v2.0.0 validation — 2026-09-20
 
 ## Completed source checks

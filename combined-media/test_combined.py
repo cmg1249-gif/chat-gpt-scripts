@@ -150,6 +150,15 @@ class CombinedTests(unittest.TestCase):
         self.assertEqual(a[2], 3840)
         self.assertEqual(first[14:], bytes(3840))
         stream.close()
+
+    def test_delayed_audio_worker_does_not_burst_catchup_packets(self):
+        mixer = media.AudioMixer()
+        mixer.stop = Mock()
+        mixer.stop.is_set.side_effect = [False, False, True]
+        with patch.object(media.time, 'monotonic', side_effect=[0, 0, .05, .07, .071]):
+            mixer._run()
+        self.assertAlmostEqual(mixer.stop.wait.call_args_list[0].args[0], .02)
+        self.assertGreater(mixer.stop.wait.call_args_list[1].args[0], 0)
         self.assertFalse(server.mixer.subscribers)
 
     def test_audio_reconnect_does_not_reopen_speaker_capture(self):
@@ -213,6 +222,49 @@ class CombinedTests(unittest.TestCase):
             recorder = viewer.Recorder(directory, 'mp4')
             (Path(directory)/'roomcam_test.mp4').write_bytes(b'previous')
             self.assertEqual(recorder._unique_base('test'), 'roomcam_test_2')
+
+    def test_desktop_refreshes_geometry_after_resize(self):
+        now = [0.0]
+        sizes = [(640, 480), (800, 600)]
+        contexts = []
+        def make_capture():
+            w, h = sizes[min(len(contexts), 1)]
+            capture = Mock()
+            capture.__enter__ = Mock(return_value=capture)
+            capture.__exit__ = Mock(return_value=False)
+            capture.monitors = [{}, dict(left=0, top=0, width=w, height=h)]
+            capture.grab.return_value = np.zeros((h, w, 4), dtype=np.uint8)
+            contexts.append(capture)
+            return capture
+        with patch.object(media.mss, 'MSS', side_effect=make_capture), \
+             patch.object(media.time, 'monotonic', side_effect=lambda: now[0]), \
+             patch.object(media.time, 'sleep', side_effect=lambda _: now.__setitem__(0, now[0]+1.1)):
+            stream = media.desktop_frames(1, lambda: True)
+            try:
+                shapes = []
+                for _ in range(2):
+                    jpeg = next(stream).split(b'\r\n\r\n', 1)[1][:-2]
+                    shapes.append(cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR).shape[:2])
+                self.assertEqual(shapes, [(480, 640), (600, 800)])
+                contexts[0].__exit__.assert_called_once()
+            finally:
+                stream.close()
+
+    def test_recording_intermediate_preserves_pixels(self):
+        with tempfile.TemporaryDirectory() as directory:
+            frame = np.random.default_rng(42).integers(0, 256, (180, 320, 3), dtype=np.uint8)
+            recorder = viewer.Recorder(directory, 'mp4')
+            recorder.start(frame, 48000, 2)
+            recorder.write_video(frame)
+            recorder.vw.release()
+            capture = cv2.VideoCapture(recorder._vpath)
+            try:
+                ok, decoded = capture.read()
+                self.assertTrue(ok)
+                np.testing.assert_array_equal(decoded, frame)
+            finally:
+                capture.release()
+                recorder.stop()
 
 
 if __name__ == '__main__':

@@ -2,7 +2,7 @@
 
 A Windows x64 proof of concept combining Claude's camera/microphone viewer and recording support with the desktop-sharing features from `cmg1249-gif/chat-gpt-scripts` v0.2.0. Use it on your own equipment or with permission and the knowledge of anyone being captured.
 
-## Run the matching v2.0.0 pair
+## Run the matching v2.0.1 pair
 
 1. Run **webcam_server.exe** on the sharing computer. There is **no server password prompt**. A tray icon provides status and **Stop sharing**.
 2. Run **viewer.exe** on the viewing computer. Choose an **8–128 character password in the listener**. It discovers and pairs with the waiting server.
@@ -11,7 +11,7 @@ A Windows x64 proof of concept combining Claude's camera/microphone viewer and r
 
 Use the same EXEs on a physical PC or Windows VM. Python, Cloudflared, trusted CA certificates, and the viewer's recording encoder are bundled. Both computers need outbound internet access. NAT needs no inbound port forwarding. A VM still needs working display/audio drivers; Windows 11 VirtualBox guests should expose a supported speaker device, such as Intel HD Audio, for desktop audio.
 
-Replace **both** old EXEs. The new pairing and mixed-audio protocol require a matching v2.0.0 server and viewer. Existing optional device/network settings in `roomcam_config.ini` remain readable; the server ignores its old password setting. The selected session password is kept in memory and is not written by the server. Restarting the server creates a new pairing session.
+Replace **both** old EXEs. The new pairing and mixed-audio protocol require a matching v2.0.1 server and viewer. Existing optional device/network settings in `roomcam_config.ini` remain readable; the server ignores its old password setting. The selected session password is kept in memory and is not written by the server. Restarting the server creates a new pairing session.
 
 ## Windows viewer controls
 
@@ -64,3 +64,9 @@ No configuration editing is required for the default demo. Advanced users can se
 Initial discovery is a shared public ntfy topic with a short-lived pairing token, so use one demo host at a time and share the application only with trusted participants. Someone who can access discovery can attempt to claim an unpaired server. After pairing, advertisements are signed with a password-derived key, and reconnect discovery checks the server session before using a new address. Certificate and hostname checks remain enabled, including on fresh Windows installations with sparse root stores. Service availability and quotas still apply.
 
 Camera/microphone features and the recorder originate in this repository's Claude version; desktop capture, shared WASAPI capture, TLS trust, and reconnect behavior draw on the user's `chat-gpt-scripts` project. Neither capture nor recording installs a startup task.
+
+## v2.0.1 picture-quality update
+
+Desktop capture refreshes cached display geometry every second to follow VM/display resolution changes. Desktop video now uses JPEG quality 85 and a 1920-pixel width limit (previously 70 and 1600); higher-resolution monitors are downscaled with area filtering. The frame-rate limit remains 12 fps. Higher image quality uses more network bandwidth.
+
+Recording uses a lossless FFV1 intermediate instead of another JPEG encoding, then H.264 CRF 18 for MP4. Temporary recordings can use more disk space. These changes improve new captures; they cannot restore detail missing from existing recordings.

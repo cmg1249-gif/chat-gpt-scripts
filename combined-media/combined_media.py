@@ -23,22 +23,27 @@ def list_monitors():
                 for i, monitor in enumerate(capture.monitors[1:], 1)]
 
 
-def desktop_frames(monitor, keep_running, width=1600, fps=12, quality=70):
-    with mss.MSS() as capture:
-        if not 1 <= monitor < len(capture.monitors):
-            return
-        while keep_running():
-            started = time.monotonic()
-            frame = np.asarray(capture.grab(capture.monitors[monitor]))[:, :, :3]
-            if width and frame.shape[1] > width:
-                frame = cv2.resize(frame, (width, round(frame.shape[0] * width / frame.shape[1])))
-            ok, data = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
-            if ok:
-                jpeg = data.tobytes()
-                yield (b'--frame\r\nContent-Type: image/jpeg\r\n'
-                       + f'X-Timestamp: {started:.6f}\r\nContent-Length: {len(jpeg)}\r\n\r\n'.encode()
-                       + jpeg + b'\r\n')
-            time.sleep(max(0, 1 / fps - (time.monotonic() - started)))
+def desktop_frames(monitor, keep_running, width=1920, fps=12, quality=85):
+    # MSS caches monitor geometry. Renew the capture context periodically so
+    # resizing a VM or changing display resolution cannot leave stale bounds.
+    while keep_running():
+        with mss.MSS() as capture:
+            if not 1 <= monitor < len(capture.monitors):
+                return
+            refresh_at = time.monotonic() + 1.0
+            while keep_running() and time.monotonic() < refresh_at:
+                started = time.monotonic()
+                frame = np.asarray(capture.grab(capture.monitors[monitor]))[:, :, :3]
+                if width and frame.shape[1] > width:
+                    frame = cv2.resize(frame, (width, round(frame.shape[0] * width / frame.shape[1])),
+                                       interpolation=cv2.INTER_AREA)
+                ok, data = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+                if ok:
+                    jpeg = data.tobytes()
+                    yield (b'--frame\r\nContent-Type: image/jpeg\r\n'
+                           + f'X-Timestamp: {started:.6f}\r\nContent-Length: {len(jpeg)}\r\n\r\n'.encode()
+                           + jpeg + b'\r\n')
+                time.sleep(max(0, 1 / fps - (time.monotonic() - started)))
 
 
 class PCMBuffer:
@@ -161,8 +166,10 @@ class AudioMixer:
                     subscriber.put_nowait(packet)
             deadline += FRAMES / RATE
             now = time.monotonic()
-            if deadline < now - .1:
-                deadline = now
+            if deadline < now:
+                # A delayed worker must not emit catch-up packets back-to-back
+                # with identical host timestamps (which also drive video sync).
+                deadline = now + FRAMES / RATE
             self.stop.wait(max(0, deadline - now))
 
     def stream(self):

@@ -752,7 +752,7 @@ class Recorder:
             self._vpath = os.path.join(self.out_dir, self._base + ".video.avi")
             self._apath = os.path.join(self.out_dir, self._base + ".audio.wav")
             vw = cv2.VideoWriter(
-                self._vpath, cv2.VideoWriter_fourcc(*"MJPG"), NOMINAL_FPS, (w, h)
+                self._vpath, cv2.VideoWriter_fourcc(*"FFV1"), NOMINAL_FPS, (w, h)
             )
             if not vw.isOpened():
                 print("[viewer] could not open a video writer; recording aborted.")
@@ -868,7 +868,7 @@ class Recorder:
             cmd += ["-i", apath]
         cmd += ["-c:v", vcodec]
         if vcodec == "libx264":
-            cmd += ["-preset", "veryfast", "-pix_fmt", "yuv420p"]
+            cmd += ["-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p"]
         elif vcodec == "mjpeg":
             cmd += ["-q:v", "5"]
         if have_audio:
