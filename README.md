@@ -26,3 +26,7 @@ Download `ScreenServer.exe` and `ScreenListener.exe` from Releases. See the [pro
 Download the matching **webcam_server.exe** and **viewer.exe** from the [v2.0.1 release](https://github.com/cmg1249-gif/chat-gpt-scripts/releases/tag/v2.0.1). These replace the earlier desktop-only pair for combined sharing. The release improves desktop clarity and refreshes display geometry after resolution changes, with current checks and earlier physical-PC/VirtualBox NAT validation documented in [VALIDATION.md](combined-media/VALIDATION.md).
 
 Camera/microphone and recording functionality originated in [Claude-Written-Scripts](https://github.com/cmg1249-gif/Claude-Written-Scripts/tree/d589473/ducky-cam-web-with-audio); desktop/audio, pairing, and reliability improvements combine work from both repositories.
+
+## TCP broker
+
+See [tcp-broker/](tcp-broker/) for a dependency-free Python server that pairs two authenticated TCP connections and relays bytes. Its README documents the protocol and hosting limitations.
