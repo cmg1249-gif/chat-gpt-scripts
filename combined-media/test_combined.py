@@ -155,11 +155,21 @@ class CombinedTests(unittest.TestCase):
         mixer = media.AudioMixer()
         mixer.stop = Mock()
         mixer.stop.is_set.side_effect = [False, False, True]
-        with patch.object(media.time, 'monotonic', side_effect=[0, 0, .05, .07, .071]):
+        with patch.object(media.time, 'perf_counter', side_effect=[0, .05, .07, .071]), \
+             patch.object(media.time, 'monotonic', side_effect=[0, .07]):
             mixer._run()
         self.assertAlmostEqual(mixer.stop.wait.call_args_list[0].args[0], .02)
         self.assertGreater(mixer.stop.wait.call_args_list[1].args[0], 0)
         self.assertFalse(server.mixer.subscribers)
+
+    def test_audio_worker_waits_when_deadline_equals_clock_tick(self):
+        mixer = media.AudioMixer()
+        mixer.stop = Mock()
+        mixer.stop.is_set.side_effect = [False, True]
+        with patch.object(media.time, 'perf_counter', side_effect=[0, .02]), \
+             patch.object(media.time, 'monotonic', return_value=0):
+            mixer._run()
+        self.assertAlmostEqual(mixer.stop.wait.call_args.args[0], .02)
 
     def test_audio_reconnect_does_not_reopen_speaker_capture(self):
         subscription = Mock(sample_rate=48000, chunks=queue.Queue())

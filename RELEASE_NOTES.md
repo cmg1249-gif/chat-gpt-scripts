@@ -1,12 +1,9 @@
-# v2.0.1 — Desktop clarity and display-resize handling
+# v2.0.2 — Mouse pointer in desktop viewing and recordings
 
-- Refresh desktop capture geometry every second, preventing indefinitely stale capture bounds after VM/display resizing.
-- Raise desktop JPEG quality from 70 to 85 and the width limit from 1600 to 1920; use area filtering when downscaling.
-- Prevent delayed audio workers from emitting catch-up packets with duplicate timestamps, which also affect video synchronization.
-- Remove an extra lossy JPEG recording pass using a lossless FFV1 intermediate. MP4 export now uses H.264 CRF 18.
+Desktop sharing now includes the sharing computer's visible Windows mouse pointer automatically. Its current shape and hotspot are drawn before video resizing, so the pointer appears in live desktop viewing and saved recordings. Hidden/suppressed cursors stay hidden; monitor offsets and edge clipping are handled.
 
-Download both `webcam_server.exe` and `viewer.exe`. Password setup stays on the listener; the server retains its tray stop control.
+Replace `webcam_server.exe` on the sharing computer. The ZIP contains the matching server, viewer, and diagnostic executables. No settings change is required.
 
-Higher quality requires more bandwidth and lossless temporary recordings require more disk space. The desktop frame-rate limit remains 12 fps.
+Validation was performed locally on Windows without a VM. See the bundled VALIDATION.md for the exact checks and limits.
 
-The supplied clip contains two Windows taskbars and only nine frames. Stale capture geometry was found and addressed, but reproducing the exact doubled-taskbar symptom on the guest remains unconfirmed. See VALIDATION.md for the checks actually run on this build.
+Also corrects an audio pacing issue found during release verification: Windows timer resolution could produce duplicate audio timestamps. Scheduling now uses a high-resolution clock while preserving the shared audio/video timestamp timebase.

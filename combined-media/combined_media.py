@@ -9,6 +9,7 @@ import cv2
 import mss
 import numpy as np
 from desktop_audio import AudioHub, AudioUnavailable
+from desktop_cursor import draw_cursor
 
 RATE = 48000
 CHANNELS = 2
@@ -33,7 +34,9 @@ def desktop_frames(monitor, keep_running, width=1920, fps=12, quality=85):
             refresh_at = time.monotonic() + 1.0
             while keep_running() and time.monotonic() < refresh_at:
                 started = time.monotonic()
-                frame = np.asarray(capture.grab(capture.monitors[monitor]))[:, :, :3]
+                bounds = capture.monitors[monitor]
+                frame = np.asarray(capture.grab(bounds))[:, :, :3]
+                frame = draw_cursor(frame, bounds)
                 if width and frame.shape[1] > width:
                     frame = cv2.resize(frame, (width, round(frame.shape[0] * width / frame.shape[1])),
                                        interpolation=cv2.INTER_AREA)
@@ -150,8 +153,8 @@ class AudioMixer:
 
     def _run(self):
         seq = 0
-        deadline = time.monotonic()
         while not self.stop.is_set():
+            started = time.perf_counter()
             timestamp = time.monotonic() - FRAMES / RATE
             pcm = self._mix()
             packet = HEADER.pack(timestamp, seq & 0xffffffff, len(pcm)) + pcm
@@ -164,9 +167,12 @@ class AudioMixer:
                         except queue.Empty:
                             pass
                     subscriber.put_nowait(packet)
-            deadline += FRAMES / RATE
-            now = time.monotonic()
-            if deadline < now:
+            # Python 3.12 monotonic() has coarse Windows clock ticks. Use
+            # the high-resolution clock for pacing and retain the shared
+            # monotonic timebase for audio/video timestamps.
+            deadline = started + FRAMES / RATE
+            now = time.perf_counter()
+            if deadline <= now:
                 # A delayed worker must not emit catch-up packets back-to-back
                 # with identical host timestamps (which also drive video sync).
                 deadline = now + FRAMES / RATE

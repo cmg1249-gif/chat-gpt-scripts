@@ -19,11 +19,11 @@ This is experimental software, not a production-ready remote-access product. Aut
 
 Download `ScreenServer.exe` and `ScreenListener.exe` from Releases. See the [project README](screen-recording/README.md) for usage, rebuilding, and the local executable test.
 
-## Combined camera and desktop sharing — v2.0.1
+## Combined camera and desktop sharing — v2.0.2
 
 [`combined-media/`](combined-media/) adds webcam selection, microphone and desktop-speaker mixing, monitor switching, browser controls, and recording. Password setup remains in the listener; the server has a tray stop control and no password popup.
 
-Download the matching **webcam_server.exe** and **viewer.exe** from the [v2.0.1 release](https://github.com/cmg1249-gif/chat-gpt-scripts/releases/tag/v2.0.1). These replace the earlier desktop-only pair for combined sharing. The release improves desktop clarity and refreshes display geometry after resolution changes, with current checks and earlier physical-PC/VirtualBox NAT validation documented in [VALIDATION.md](combined-media/VALIDATION.md).
+Download the matching **webcam_server.exe** and **viewer.exe** from the [v2.0.2 release](https://github.com/cmg1249-gif/chat-gpt-scripts/releases/tag/v2.0.2). These replace the earlier desktop-only pair for combined sharing. The release adds the Windows mouse pointer to desktop viewing and recordings, preserving the previous clarity and display-resize improvements, with current checks and earlier physical-PC/VirtualBox NAT validation documented in [VALIDATION.md](combined-media/VALIDATION.md).
 
 Camera/microphone and recording functionality originated in [Claude-Written-Scripts](https://github.com/cmg1249-gif/Claude-Written-Scripts/tree/d589473/ducky-cam-web-with-audio); desktop/audio, pairing, and reliability improvements combine work from both repositories.
 

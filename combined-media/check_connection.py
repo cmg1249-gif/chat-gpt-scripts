@@ -205,8 +205,8 @@ def main():
     with (directory/name).open('w',encoding='utf-8',buffering=1) as report,contextlib.redirect_stdout(report),contextlib.redirect_stderr(report):
         try:
             if args.self_test:
-                import unittest,test_combined
-                result=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromModule(test_combined))
+                import unittest,test_combined,test_cursor
+                result=unittest.TextTestRunner(verbosity=2).run(unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromModule(module) for module in (test_combined, test_cursor)))
                 if not result.wasSuccessful(): raise SystemExit(1)
             elif args.internet: internet_check()
             else: local_check()

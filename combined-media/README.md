@@ -2,7 +2,7 @@
 
 A Windows x64 proof of concept combining Claude's camera/microphone viewer and recording support with the desktop-sharing features from `cmg1249-gif/chat-gpt-scripts` v0.2.0. Use it on your own equipment or with permission and the knowledge of anyone being captured.
 
-## Run the matching v2.0.1 pair
+## Run the matching v2.0.2 pair
 
 1. Run **webcam_server.exe** on the sharing computer. There is **no server password prompt**. A tray icon provides status and **Stop sharing**.
 2. Run **viewer.exe** on the viewing computer. Choose an **8–128 character password in the listener**. It discovers and pairs with the waiting server.
@@ -11,7 +11,7 @@ A Windows x64 proof of concept combining Claude's camera/microphone viewer and r
 
 Use the same EXEs on a physical PC or Windows VM. Python, Cloudflared, trusted CA certificates, and the viewer's recording encoder are bundled. Both computers need outbound internet access. NAT needs no inbound port forwarding. A VM still needs working display/audio drivers; Windows 11 VirtualBox guests should expose a supported speaker device, such as Intel HD Audio, for desktop audio.
 
-Replace **both** old EXEs. The new pairing and mixed-audio protocol require a matching v2.0.1 server and viewer. Existing optional device/network settings in `roomcam_config.ini` remain readable; the server ignores its old password setting. The selected session password is kept in memory and is not written by the server. Restarting the server creates a new pairing session.
+Replace **both** old EXEs. The new pairing and mixed-audio protocol require a matching v2.0.2 server and viewer. Existing optional device/network settings in `roomcam_config.ini` remain readable; the server ignores its old password setting. The selected session password is kept in memory and is not written by the server. Restarting the server creates a new pairing session.
 
 ## Windows viewer controls
 
@@ -37,6 +37,8 @@ Run `viewer.exe --browser`. Pairing and password selection still happen in the l
 
 The page provides camera/desktop selection, monitor and device dropdowns, microphone and desktop-audio toggles, **Listen / Mute playback**, and **Stop all capture**. Listen controls playback; microphone and desktop capture are separate controls. Recording is available in the Windows viewer, as in the original app. Browser video and audio use independent playback; use the Windows viewer for the timestamp-based A/V synchronization.
 
+Desktop video automatically includes the sharing computer's visible mouse pointer, including its current Windows shape. The pointer is included in both live viewing and recordings. Hidden cursors remain hidden. Update the server executable on the sharing computer to enable this fix.
+
 ## Audio and recording
 
 Microphone audio and the default Windows speaker output are converted to **48 kHz, 16-bit stereo** and sent on the same timestamped stream. With both enabled, each is mixed at half gain to reduce clipping. Changing microphone rates does not change the wire or recording format. Speaker capture is shared across reconnecting listeners to avoid repeatedly opening the audio device.
@@ -55,7 +57,7 @@ Extract all files into a writable folder.
 
 See `VALIDATION.md` for the exact tested environments. A locked/secure desktop, absent devices, blocked outbound services, or service quotas may prevent operation.
 
-To build, use **Python 3.12 on Windows x64**, install `requirements.txt`, put the official `cloudflared.exe` beside the source, then run `build.ps1 -Python <python.exe>`. The audio resampler uses Python 3.12's `audioop`; Python 3.13+ is not the supported source-build runtime. Run `python -m unittest -v test_combined` for regression checks.
+To build, use **Python 3.12 on Windows x64**, install `requirements.txt`, put the official `cloudflared.exe` beside the source, then run `build.ps1 -Python <python.exe>`. The audio resampler uses Python 3.12's `audioop`; Python 3.13+ is not the supported source-build runtime. Run `python -m unittest -v test_combined test_cursor` for regression checks.
 
 ## Optional settings and discovery
 
@@ -65,7 +67,7 @@ Initial discovery is a shared public ntfy topic with a short-lived pairing token
 
 Camera/microphone features and the recorder originate in this repository's Claude version; desktop capture, shared WASAPI capture, TLS trust, and reconnect behavior draw on the user's `chat-gpt-scripts` project. Neither capture nor recording installs a startup task.
 
-## v2.0.1 picture-quality update
+## v2.0.2 picture-quality update
 
 Desktop capture refreshes cached display geometry every second to follow VM/display resolution changes. Desktop video now uses JPEG quality 85 and a 1920-pixel width limit (previously 70 and 1600); higher-resolution monitors are downscaled with area filtering. The frame-rate limit remains 12 fps. Higher image quality uses more network bandwidth.
 

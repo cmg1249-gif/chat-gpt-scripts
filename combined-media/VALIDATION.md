@@ -1,3 +1,15 @@
+# v2.0.2 validation — 2026-09-20
+
+- Final source and packaged diagnostic each passed all 34 regression tests on the physical Windows PC using Python 3.12 x64. No VM was used for this patch.
+- Native Windows cursor tests cover arrow, I-beam and hand shapes; negative monitor origins and hotspots; clipping at all four edges; hidden/suppressed/unavailable cursors; other-monitor exclusion; GDI allocation failures; and 200 repeated draws without GDI handle growth.
+- Cursor pixels survived the desktop MJPEG stream, downscaling, and an actual MP4 encode/decode using the recorder and bundled ffmpeg.
+- A real current-desktop capture verified the visible cursor changed 144 pixels near its actual monitor-relative position. The overlay took 18.4 ms in this single observation. The check did not move the mouse or save desktop images.
+- Final packaged localhost check passed 12 real frames from each of two physical monitors at 1920x1080, 997 Hz speaker-tone detection, three audio reconnects, and packaged viewer desktop decoding with playback muted. Captured desktop images/audio were not saved or published.
+- Initial packaged tests exposed duplicate audio timestamps under Python 3.12's coarse Windows monotonic clock. High-resolution scheduling now paces packets while retaining the shared monotonic timestamp timebase. The fix passed a deterministic deadline regression and 100 repeated live timestamp checks before the final packaged tests.
+- Internet transport and VM checks were not repeated for this patch; prior results below describe earlier releases. The current visible cursor shape is sampled per frame; animated cursors use their native first animation frame. Locked/secure desktops and every possible custom cursor/DPI configuration are not covered.
+
+## Previous release validation
+
 # v2.0.1 validation — 2026-09-20
 
 - 26 source regression tests passed, including changing capture dimensions from 640×480 to 800×600 without restarting the stream and exact pixel preservation through the FFV1 recording intermediate.
