@@ -18,3 +18,11 @@ The server runs without a banner or console window and provides a system-tray co
 This is experimental software, not a production-ready remote-access product. Automatic discovery uses a shared ntfy topic containing the short-lived pairing token; anyone with access to that topic can attempt to claim an unpaired server. The repository and its paired binaries should be shared only with trusted users.
 
 Download `ScreenServer.exe` and `ScreenListener.exe` from Releases. See the [project README](screen-recording/README.md) for usage, rebuilding, and the local executable test.
+
+## Combined camera and desktop sharing — v2.0.0
+
+[`combined-media/`](combined-media/) adds webcam selection, microphone and desktop-speaker mixing, monitor switching, browser controls, and recording. Password setup remains in the listener; the server has a tray stop control and no password popup.
+
+Download the matching **webcam_server.exe** and **viewer.exe** from the [v2.0.0 release](https://github.com/cmg1249-gif/chat-gpt-scripts/releases/tag/v2.0.0). These replace the earlier desktop-only pair for combined sharing. The release reuses the tested combined v2.0.0 binaries, with 23 regression checks and physical-PC/VirtualBox NAT validation documented in [VALIDATION.md](combined-media/VALIDATION.md).
+
+Camera/microphone and recording functionality originated in [Claude-Written-Scripts](https://github.com/cmg1249-gif/Claude-Written-Scripts/tree/d589473/ducky-cam-web-with-audio); desktop/audio, pairing, and reliability improvements combine work from both repositories.
