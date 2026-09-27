@@ -11,6 +11,7 @@ Each folder is a complete, separate program, like the projects in Claude-Written
 | [Camera + desktop sharing](camera-desktop-sharing/) | Webcam or desktop video, microphone and speaker audio, browser viewing, and recording | **webcam_server.py** on the sharing PC; **viewer.py** on the viewing PC |
 | [Screen sharing](screen-sharing/) | Desktop video and speaker audio | **server.py** on the sharing PC; **listener.py** on the viewing PC |
 | [TCP broker](tcp-broker/) | Pairs two authenticated TCP connections and relays data | **server.py** on the relay host |
+| [Linux versions (Arch x86_64)](linux/) | Camera/desktop sharing, viewer, and diagnostics for Linux | **webcam_server.py** and **viewer.py**, or the packaged `.elf` programs |
 
 ## Download and run the Python code
 
