@@ -1,5 +1,33 @@
 # Screen Sharing — Proof of Concept (PoC)
 
+## Run from Python source
+
+Download and extract the repository ZIP, then keep this entire `screen-sharing` folder together. Open PowerShell in this folder on each computer. Use Python 3.12 on Windows x64.
+
+Install the dependencies once on each computer:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Put the official Windows x64 `cloudflared.exe` beside `server.py` on the sharing computer. This external executable is not included in the source ZIP; see [Cloudflare's downloads](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/).
+
+On the sharing computer:
+
+```powershell
+.\.venv\Scripts\python.exe server.py
+```
+
+On the viewing computer, in its copy of this same folder:
+
+```powershell
+.\.venv\Scripts\python.exe listener.py
+```
+
+Choose the password in the listener. Use the server's tray menu to stop sharing. **Run `listener.py` to view the screen**; `viewer.py` is a supporting module in this program. Keep all helper Python files beside these launch scripts.
+
+
 This experimental proof of concept demonstrates password-paired desktop streaming between a Windows server and viewer. It is not production-ready remote-access software.
 
 ## Run
@@ -42,4 +70,3 @@ Use Python 3.12 on Windows x64. In your own virtual environment, install `requir
 The server supports `--local`, `--port`, and optional `--show-banner`. Use `--session-file` and `--stop-after` for local testing. The listener supports `--monitor N`, `--list-monitors`, and `--mute`, plus `--session-file`, `--frames`, and `--headless` for repeatable integration checks. Frame-count checks do not start audio playback.
 
 Connection progress and failures are recorded in `%LOCALAPPDATA%\CodexScreenServer\server.log`, with two rotated backups. Fatal startup failures in tray mode also write `last-error.txt`. Transient failures stay running and retry; the listener prints discovery errors instead of hiding them. Service outages, firewall restrictions and service rate limits still affect availability.
-

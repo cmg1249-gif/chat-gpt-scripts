@@ -1,5 +1,33 @@
 # RoomCam: camera, desktop, microphone, and speaker audio
 
+## Run from Python source
+
+Download and extract the repository ZIP, then keep this entire `camera-desktop-sharing` folder together. Open PowerShell in this folder on each computer. Use Python 3.12 on Windows x64.
+
+Install the dependencies once on each computer:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Put the official Windows x64 `cloudflared.exe` beside `webcam_server.py` on the sharing computer. This external executable is not included in the source ZIP; see [Cloudflare's downloads](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/).
+
+On the sharing computer:
+
+```powershell
+.\.venv\Scripts\python.exe webcam_server.py
+```
+
+On the viewing computer, in its copy of this same folder:
+
+```powershell
+.\.venv\Scripts\python.exe viewer.py
+```
+
+Choose the password in the viewer. Use the server's tray menu to stop sharing. Keep the supporting Python files and `page.html` beside the launch scripts. `combined_media.py`, `connection.py`, and the other helper modules are used by the app; you do not launch them separately. The optional browser viewer is started with `viewer.py --browser`.
+
+
 A Windows x64 proof of concept combining Claude's camera/microphone viewer and recording support with the desktop-sharing features from `cmg1249-gif/chat-gpt-scripts` v0.2.0. Use it on your own equipment or with permission and the knowledge of anyone being captured.
 
 ## Run the matching v2.0.2 pair

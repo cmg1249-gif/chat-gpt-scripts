@@ -3,7 +3,9 @@
 Dependency-free Python 3.10+ server that pairs two authenticated TCP connections
 and relays bytes in both directions. It does not execute commands or create a shell.
 
-## Run
+## Run from Python source
+
+Download and extract the repository ZIP, open the `tcp-broker` folder, and open a terminal there. Only `server.py` is required for this program. Use Python 3.10 or newer; there are no packages to install.
 
 ```sh
 python server.py
