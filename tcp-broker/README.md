@@ -1,38 +1,32 @@
 # TCP broker
 
-Dependency-free Python 3.10+ server that pairs two authenticated TCP connections
-and relays bytes in both directions. It does not execute commands or create a shell.
+Dependency-free Python 3.10+ relay. It does not execute commands or create shells.
+Only server.py is needed. Start it with: python3 server.py
 
-## Run from Python source
+| Role | Port | Authentication |
+|---|---|---|
+| Sender (controller) | 4444 | Enter the printed access token followed by Enter |
+| Receiver | 4445 | No token, prompts, or status banners |
 
-Download and extract the repository ZIP, open the `tcp-broker` folder, and open a terminal there. Only `server.py` is required for this program. Use Python 3.10 or newer; there are no packages to install.
+Sender: nc SERVER_ADDRESS 4444
+Enter the token, then wait for the Connected banner before sending data.
+Receiver: nc SERVER_ADDRESS 4445
 
-```sh
-python server.py
-```
+Either side can connect first. Unmatched connections wait up to 120 seconds.
+Data is relayed in both directions. Only one pair is supported at a time.
+Extra connections of the same role are rejected; receivers close silently.
+When either paired endpoint disconnects, both close and another pair can connect.
+The token changes whenever the broker restarts.
 
-The server listens on all IPv4 interfaces on TCP port 4444 and prints a randomly
-generated access token. The token changes whenever the process restarts.
+## Hosting
 
-Connect each endpoint using `nc SERVER_ADDRESS 4444`, then enter the printed token
-followed by Enter. The first endpoint waits up to 120 seconds for the second.
-After both receive the connection banner, their subsequent bytes are relayed.
-Only one pair is supported at a time. When either endpoint disconnects, both
-connections close and the broker becomes available for another pair.
+- Allow the sender to reach TCP 4444. Restrict TCP 4445 to your receiving machine's public IP in your firewall. Anyone who can reach 4445 can claim the receiver slot, receive the sender's data, and send replies. The sender token does not verify the receiver.
+- Traffic, including the token, is plaintext. Use an encrypted tunnel for sensitive traffic. TLS is not implemented.
+- Both ports must reach the same server process.
+- No automatic startup or persistence is included. Configure a service to run after SSH disconnects and reboots.
+- Public internet connectivity is unverified.
 
-## Hosting and limitations
+## Development checks
 
-- Run on a publicly reachable host and allow incoming TCP port 4444, or expose
-  internal port 4444 through a hosting provider's TCP proxy. Both endpoints connect
-  to the host's public address and external port.
-- Keep one server process/replica running so both endpoints reach the same broker.
-- Traffic, including the token, is plaintext. Use an encrypted tunnel or trusted
-  network; this version does not implement TLS.
-- Authentication prompts and status banners are part of this protocol. This is
-  not a drop-in transparent relay for a shell attached directly to netcat: an
-  endpoint must handle authentication and consume banners before attaching a shell.
-- No persistence, automatic startup, or hosted deployment is included.
-
-Local checks exercised invalid-token rejection, pairing, bidirectional binary
-relay, busy rejection, disconnect cleanup, and reuse. Public internet connectivity
-has not been tested.
+Run: python3 -m unittest -v test_server.py
+Local socket tests cover invalid tokens, connection order, transparent receiver data, binary relay, busy rejection, disconnect cleanup, and reuse.

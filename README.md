@@ -10,7 +10,7 @@ Each folder is a complete, separate program, like the projects in Claude-Written
 |---|---|---|
 | [Camera + desktop sharing](camera-desktop-sharing/) | Webcam or desktop video, microphone and speaker audio, browser viewing, and recording | **webcam_server.py** on the sharing PC; **viewer.py** on the viewing PC |
 | [Screen sharing](screen-sharing/) | Desktop video and speaker audio | **server.py** on the sharing PC; **listener.py** on the viewing PC |
-| [TCP broker](tcp-broker/) | Pairs two authenticated TCP connections and relays data | **server.py** on the relay host |
+| [TCP broker](tcp-broker/) | Pairs an authenticated sender with a prompt-free receiver | **server.py** on the relay host |
 | [Linux versions (Arch x86_64)](linux/) | Camera/desktop sharing, viewer, and diagnostics for Linux | **webcam_server.py** and **viewer.py**, or the packaged `.elf` programs |
 
 ## Download and run the Python code
@@ -52,4 +52,4 @@ Camera/microphone and recording functionality originated in [Claude-Written-Scri
 
 ## TCP broker
 
-See [tcp-broker/](tcp-broker/) for a dependency-free Python server that pairs two authenticated TCP connections and relays bytes. Its README documents the protocol and hosting limitations.
+See [tcp-broker/](tcp-broker/) for a dependency-free Python server that pairs a token-authenticated sender on port 4444 with a prompt-free receiver on port 4445. Its README documents the protocol and hosting limitations.
