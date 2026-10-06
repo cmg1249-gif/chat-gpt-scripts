@@ -2,6 +2,10 @@
 
 A collection of scripts and experimental projects built with ChatGPT.
 
+## Bitforge classroom game — both versions
+
+Learn binary, IPv4, subnetting, and the OSI model while reclaiming networks from an AI overlord. [Bitforge instructions and editable source](games/bitforge/) include **Version 1 Classic** and **Version 2 World Campaign**. [Download both versions](https://github.com/cmg1249-gif/chat-gpt-scripts/releases/tag/bitforge-v1-v2): download an HTML game, then open it in your browser. No Python, installation, or account is needed.
+
 ## Find your program
 
 Each folder is a complete, separate program, like the projects in Claude-Written-Scripts. Keep the files in your chosen folder together; the main Python scripts import the helper files beside them.

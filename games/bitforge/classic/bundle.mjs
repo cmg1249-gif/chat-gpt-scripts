@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
+const out=path.resolve('build');fs.mkdirSync(out,{recursive:true});
+const css=fs.readFileSync('dist/style.css','utf8').replace(/^@import[^\n]*\n/,'');
+const engine=fs.readFileSync('dist/engine.js','utf8').replace(/^export /gm,'');
+const terminal=fs.readFileSync('dist/terminal.js','utf8').replace(/^import[^\n]+\n/gm,'').replace(/^export /gm,'');
+const terminalUI=fs.readFileSync('dist/terminal-ui.js','utf8').replace(/^import[^\n]+\n/gm,'').replace(/^export /gm,'');
+const game=fs.readFileSync('dist/game.js','utf8').replace(/^import[^\n]+\n/gm,'');
+let html=fs.readFileSync('dist/index.html','utf8').replace('<link rel="stylesheet" href="style.css">',()=>'<style>'+css+'</style>').replace('<script type="module" src="game.js"></script>',()=>'<script>\n'+engine+'\n'+terminal+'\n'+terminalUI+'\n'+game+'\n</script>');
+fs.writeFileSync(path.join(out,'Bitforge.html'),html);console.log('Self-contained offline game: '+path.join(out,'Bitforge.html'));

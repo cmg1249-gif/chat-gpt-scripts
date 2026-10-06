@@ -1,0 +1,15 @@
+BITFORGE — VERSION 1 (CLASSIC)
+Frozen on October 5, 2026, before the world-campaign experiment.
+Includes the required workstation economy, six curriculum sectors, OSI endgame,
+six terminal missions, fading binary guides, and offline browser play.
+
+Source commit: bf7f392e603779d85538cfb1b32d4a7be3982beb
+Published version: appgprj_6ac44c76626c819180ba0845f4b41239~appgver_ae1a53ff4c7881918a46410d8f0aecf1
+
+SHA256 Bitforge-v1.html:
+6A06EF8B5D231FAB4A98DDD61B038CD6FD9FD8DC77AA88D17C3731A2882E8C52
+SHA256 Bitforge-v1-source.zip:
+EAE57446799743BABDEA42AC5351719103ED48C4876877183ACEB5AD7728DE0E
+
+These files preserve the game release, not a student's personal browser save.
+The online Classic link uses separate browser storage from the world campaign.

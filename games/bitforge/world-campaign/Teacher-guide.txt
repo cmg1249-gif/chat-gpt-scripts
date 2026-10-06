@@ -1,0 +1,166 @@
+BITFORGE — WORLD CAMPAIGN VERSION 2 — TEACHER GUIDE
+
+Open Bitforge.html in a modern browser. This self-contained version needs no
+installation, account, or internet connection. Download the file first if your
+classroom system blocks HTML previews. The hosted edition remains private
+until you change its sharing settings.
+
+THE STORY AND REWARDS
+In the fictional year 2149, the Overseer AI controls the world and its internet.
+Students join a resistance rebuilding a human-controlled network. Verified
+recovery tasks restore controller/server access, letting the team recover
+components from maintenance caches and intel about captured infrastructure.
+Components fund site equipment and recovery tools; intel unlocks access routes
+and optional tools. Working uplink modules come only from workstation recoveries. No network harvesting or idle payouts occur. The
+animated dots on reclaimed links represent resistance packet traffic.
+
+LEARNING PATH
+1. First region: 4-bit binary, place values, encoding and decoding.
+2. Second region: 8-bit values from 0 to 255.
+3. Third region: IPv4 octets and their binary representations.
+4. Fourth region: CIDR prefixes, subnet masks, and host-bit counts.
+5. Fifth region: network/broadcast addresses, host capacity, subnet sizing.
+6. Final region: layer responsibilities and incident diagnosis, covering all
+   seven layers. The guide distinguishes the OSI model from real protocol stacks.
+
+Binary place-value labels and the live decimal total are shown for the first
+four repairs in each introductory binary sector. They then disappear. IP and
+mask exercises start without them. Reveal place values restores help for the
+current question only; that completion is recorded as assisted. Hints never
+reduce the cache reward. Hidden labels also stay hidden in screen-reader names.
+
+Every two completed repairs restores a relay. Six qualifies for the next site;
+eight completes all four relays in a sector. Opening a new site costs intel, components, and one uplink module from the
+previous sector’s workstation mission. Restore all 24 relays, complete all six
+workstation missions, then install one final module plus 300 components and
+complete the six-task final uplink to finish the campaign. Practice continues afterward.
+The normal campaign is untimed. Dispatch sprints are optional.
+
+REQUIRED WORKSTATION RECOVERIES
+Six fictional recovery orders build from command-line basics to troubleshooting:
+1. Navigate folders, read job.txt, inspect IP configuration, test the gateway.
+2. Diagnose and reconnect a disconnected cable.
+3. Recover from a failed DHCP lease and test the local server.
+4. Diagnose a wrong default gateway; local traffic still works.
+5. Fix DNS when an IP address works but the hostname does not.
+6. Restore an HTTP service even though its host responds to ping.
+
+One case opens per sector, after the previous case is complete. These missions
+are free to access. Each verified case pays components, one intel, and one
+uplink module exactly once; replays are practice. Modules cannot be farmed
+with binary exercises or spent on optional upgrades. Completion requires inspection, repair, and verification.
+Up/Down recalls typed commands. Reference buttons insert commands without
+executing them. Case hints are available.
+
+dir, cd, type, ipconfig, ping, tracert, route print, nslookup, and curl use a
+limited Windows-style teaching subset. repair, configure, and submit are
+explicitly labeled GAME-ONLY actions, not real operating-system commands.
+The terminal never launches a shell, reads local files, or contacts networks.
+
+CLASSROOM PROMPTS
+- Explain why 11111111 is 255, not 256.
+- Convert a value after hiding the place-value labels.
+- Explain why a /26 has 64 total addresses but 62 conventional usable hosts.
+- Why can a local server respond when the default gateway is wrong?
+- What evidence separates a DNS fault from a connectivity fault?
+- Why does a successful ping not prove the website is working?
+- Identify the OSI layer by the function, rather than by a memorized keyword.
+
+SAVE FILES AND REPORTS
+Progress autosaves in the current browser when storage is available. Export a
+save before moving/renaming a local HTML file or changing devices, because
+file-based storage behavior varies by browser. Settings supports JSON export,
+confirmed import/replace, and confirmed reset. Shared browsers have one save.
+
+Revision 1 and 2 saves migrate automatically. Revision 2 retains unlocked
+sectors, balances, terminal completions, and completed campaigns. Purchased
+Routing/DNS/Service casebooks refund their original costs because access is
+now free. Previously completed recoveries grant their modules without paying
+a second component reward. Existing sites do not require retroactive hardware.
+Unfinished campaigns require all six terminal recoveries before the finale.
+
+For revision 1 saves: Existing balances become components
+and intel without loss. Binary, IP, mask, and subnet progress
+are retained and reordered. Logic-gate progress is retired; OSI starts fresh.
+Removed drone/scanner upgrades refund their intel cost. Relay amplifiers
+refund the components spent on them. Existing balances and retained upgrades stay.
+The final uplink resets because the new OSI content must be completed.
+
+Classroom exports a CSV of repair completions, first-try unassisted completions,
+attempts, restored relays, hint-assisted work, and terminal case completion.
+Reports are practice evidence, not secure assessments or a central gradebook.
+Students can edit local saves; progress is not sent to a server.
+
+ACCESS AND SCOPE
+Use mouse/touch, or Tab and Space. Enter submits typed answers and commands.
+Sound is opt-in. Reduced motion is supported. Relay inspection has a dropdown.
+Subnet exercises cover /24–/30 inside a /24. /31 and /32 have different rules
+and are explicitly outside the campaign. OSI is a conceptual reference model;
+actual implementations, especially upper-layer protocols, do not always fit
+one layer neatly.
+
+EDITABLE SOURCE
+Bitforge-source.zip contains dist/, package.json, tests.mjs, and bundle.mjs.
+Serve dist/ with a static host. For local development:
+  python -m http.server 8765 --directory dist
+Open http://localhost:8765. With Node installed, run node tests.mjs.
+The Field guide links the Cisco and Microsoft learning references.
+
+RESOURCE ECONOMY
+Signal rewards: 4 / 6 / 8 / 10 / 12 / 14 components by sector, plus one intel.
+Workstation caches: 90 / 120 / 160 / 210 / 270 / 340 components, each with
+one intel and one uplink module.
+New site costs: 80 / 110 / 140 / 180 / 230 components; 4 / 5 / 6 / 7 / 8 intel;
+one module each. Final uplink: 300 components and one module, paid once.
+Leaving or resuming the finale never charges equipment again.
+A fresh campaign can fund the full route with its 48 normal signals and six
+recoveries, without extra grinding. Optional upgrades create spending choices.
+Students who spend too much can always earn components and intel through
+additional signal practice. Mistakes and hints do not consume resources.
+
+BROWSER COMPATIBILITY
+Designed for current Chrome, Firefox (including on Kali Linux), Edge, and
+Safari. JavaScript must be enabled. No extensions, installs, terminal access,
+or experimental browser features are required for gameplay. The Windows-style
+terminal is a fictional simulation independent of the host operating system.
+The offline HTML includes its scripts and styles without module imports or
+external font dependencies. Browser storage may be limited in private mode;
+export a save to retain progress. Hosted access permissions are unchanged.
+Validation: Chromium UI tests plus standards compatibility review. Firefox
+on Kali was not directly available in this testing environment.
+
+WORLD CAMPAIGN: REGIONS AND THREAT
+Choose Cascadia (six trace points before raids), Sahara Grid (25% more base
+signal salvage, rounded down), or Pacific Haven (correct repairs remove two
+trace points). The origin stays fixed for the campaign. It changes the route
+through all six world regions. Curriculum order remains binary to OSI.
+Each region has four relay objectives and one workstation server. Reclaim all
+five to liberate it. The percentage represents 30 network objectives, not an
+estimate of geographical land area. An AI sentinel is shown next to the task.
+
+Each different incorrect signal raises local trace by one. Repeating the same
+wrong answer in the same question does not add trace. Hints and reading are
+safe. At four trace points (six for Cascadia), a sentinel jams the local link:
+one captured objective is temporarily contested, signal component salvage is
+halved, and expansion from that region is blocked. Two correct repairs clear
+the jam; assisted repairs count. More errors cannot stack additional jam while
+recovering. Banked resources, workstation modules, and learning progress remain.
+There are no attacks while idle, reading, or away. Terminal command experiments
+do not raise network trace. The workstation remains the required supply source.
+
+Scramble trace removes two points before a raid. Four correct repairs recharge
+it. During the final uplink, an uncleared jam pauses stage advancement until
+the current link is restored. Learning and rewards still count.
+
+VERSION 1 PRESERVATION
+The pre-world-campaign game is frozen in outputs/Version-1, including source,
+offline HTML, guide, release identifier, and SHA256 checksums. The hosted
+v1.html Classic link has independent browser storage. New world-campaign saves
+retain prior counts, resources, upgrades, terminal completions, and installed
+modules; choosing an origin does not erase them.
+
+ARTWORK
+World map and Overseer sentinel artwork were created using built-in image_gen.
+The editable source archive includes both PNGs and the exact generation prompts
+under dist/assets. The offline build embeds both images and has no runtime
+asset imports. The historical Version 1 files are unchanged.
