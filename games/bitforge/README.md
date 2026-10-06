@@ -17,6 +17,20 @@ A classroom browser game set in a future controlled by the Overseer AI. Restore 
 
 The game targets modern browsers; direct browser validation was performed in Chromium. Firefox/Kali and Safari have not been individually verified. The terminal is a simulation inside the game, with Windows-style commands; it never executes commands on the student's computer or accesses its network.
 
+### Download from Windows PowerShell
+
+Download both versions, teacher guides, and source code to your Desktop:
+
+```powershell
+$url="https://github.com/cmg1249-gif/chat-gpt-scripts/releases/download/bitforge-v1-v2/Bitforge-both-versions.zip"
+$outFile=Join-Path ([Environment]::GetFolderPath('Desktop')) 'Bitforge-both-versions.zip'
+(New-Object Net.WebClient).DownloadFile($url, $outFile)
+```
+
+Right-click the ZIP, choose **Extract All**, then open `Version-1/Bitforge-v1.html` or `Version-2/Bitforge.html` in your browser. The URL must point to a download, and `$outFile` must include a filename. `GetFolderPath` locates your actual Desktop, including a redirected Desktop. Downloading again replaces the file at that path.
+
+[README-Download.txt](README-Download.txt) also includes separate commands for each version. Run these commands in Windows PowerShell, not in the game's simulated terminal or the default Linux/Kali shell.
+
 ## Teaching and progression
 
 Both versions progress from four-bit binary with place-value guides to eight-bit values, IPv4, CIDR masks, subnet calculations, and OSI incident diagnosis. Binary guides fade with practice; students can request help. Required terminal missions begin with command-line basics and grow into troubleshooting. Workstation recoveries supply the modules needed for expansion, so the terminal cannot simply be skipped.
