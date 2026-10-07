@@ -128,8 +128,9 @@ def pinned_context(pem):
 
 
 class Discovery:
-    def __init__(self, code, identity, port=PORT):
+    def __init__(self, code, identity, port=PORT, topic=None):
         self.code, self.identity, self.port = code, identity, port
+        self.topic = topic or topic_for(code)
         self.stop = threading.Event()
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.bind(('0.0.0.0', port))
@@ -143,7 +144,7 @@ class Discovery:
                 packet, address = self.socket.recvfrom(4096)
                 data = json.loads(packet)
                 nonce = data.get('nonce', '')
-                if data.get('topic') != topic_for(self.code) or not re.fullmatch('[a-f0-9]{32}', nonce):
+                if data.get('topic') != self.topic or not re.fullmatch('[a-f0-9]{32}', nonce):
                     continue
                 self.socket.sendto(json.dumps(self.identity(nonce)).encode(), address)
             except (OSError, ValueError, AttributeError, TypeError):
@@ -155,9 +156,30 @@ class Discovery:
         self.thread.join(timeout=2)
 
 
-def find_lan(code, timeout=1.5):
+def owner_advert(data, owner, nonce=None):
+    # Owner discovery supplies candidates, not authentication. Only the signed,
+    # encrypted login grants access. Never send the private credential here.
+    return (isinstance(data, dict) and data.get('app') == APP and data.get('owner') == owner
+            and isinstance(data.get('created'), (int, float)) and abs(time.time() - data['created']) <= 120
+            and (nonce is None or data.get('nonce') == nonce))
+
+
+def owner_internet_candidate(data, owner):
+    if not owner_advert(data, owner):
+        raise ValueError('Expired or unrelated owner discovery.')
+    url = data.get('url')
+    if tunnel_url(url):
+        from tls import HTTPS_CONTEXT
+        return url, HTTPS_CONTEXT, 'Cloudflare'
+    if relay_url(url) and isinstance(data.get('certificate'), str):
+        return url, pinned_context(data['certificate']), 'Pinggy encrypted relay'
+    raise ValueError('Unrecognized relay address or missing certificate.')
+
+
+def find_lan(code, timeout=1.5, owner=None):
+    from control_owner import owner_topic
     nonce = secrets.token_hex(16)
-    request = json.dumps(dict(topic=topic_for(code), nonce=nonce)).encode()
+    request = json.dumps(dict(topic=owner_topic(owner) if owner else topic_for(code), nonce=nonce)).encode()
     candidates = []
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -172,7 +194,9 @@ def find_lan(code, timeout=1.5):
             try:
                 raw, source = sock.recvfrom(8192)
                 data = json.loads(raw)
-                if verified(data, code, nonce):
+                if owner_advert(data, owner, nonce) if owner else verified(data, code, nonce):
+                    if not isinstance(data.get('port'), int) or not 1 <= data['port'] <= 65535:
+                        continue
                     candidates.append((f'https://{source[0]}:{data["port"]}', pinned_context(data['certificate']), 'Local network'))
                     break
             except (OSError, ValueError, KeyError, TypeError):
@@ -180,7 +204,7 @@ def find_lan(code, timeout=1.5):
     return candidates
 
 
-def direct_candidate(address, code):
+def direct_candidate(address, code, owner=None):
     # Explicit listener-supplied IPv4 address; no redirects or arbitrary URL paths.
     ip = str(ipaddress.IPv4Address(address))
     nonce = secrets.token_hex(16)
@@ -191,6 +215,6 @@ def direct_candidate(address, code):
     # Bootstrap retrieves PUBLIC identity only. No pairing code/password is sent.
     with urllib.request.urlopen(url + '/control/identity?nonce=' + nonce, context=context, timeout=4) as response:
         data = json.loads(response.read(8192))
-    if not verified(data, code, nonce):
+    if not (owner_advert(data, owner, nonce) if owner else verified(data, code, nonce)):
         raise ValueError('That computer did not prove it owns this pairing code.')
     return url, pinned_context(data['certificate']), 'Local network'

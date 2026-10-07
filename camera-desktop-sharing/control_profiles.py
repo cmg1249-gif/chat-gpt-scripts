@@ -13,8 +13,8 @@ import zipfile
 from control_protocol import new_code, normalize_code
 from tls import HTTPS_CONTEXT
 
-VERSION = '3.0.2-preview'
-RELEASE = 'https://github.com/cmg1249-gif/chat-gpt-scripts/releases/download/v3.0.2/'
+VERSION = '3.0.3-preview'
+RELEASE = 'https://github.com/cmg1249-gif/chat-gpt-scripts/releases/download/v3.0.3/'
 HOST_SETTINGS = 'roomcam-host.json'
 FORMAT = 'roomcam-private-host-v1'
 

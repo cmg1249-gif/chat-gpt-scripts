@@ -2,6 +2,8 @@
 import http.cookiejar
 import json
 import os
+import secrets
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -19,6 +21,8 @@ spawn_options = {'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt
 sys.path.insert(0, str(platform_dir))
 from control_listener import Remote
 from control_protocol import pinned_context
+from control_owner import saved_owner_secret
+from control_profiles import VERSION
 
 
 def wait_file(path, process):
@@ -41,9 +45,11 @@ with tempfile.TemporaryDirectory(prefix='roomcam-exe-check-') as scratch:
         host = subprocess.Popen([str(platform_dir / ('dist/webcam_server' + suffix)), '--local', '--headless', '--session-file', str(host_info), '--stop-after', '60'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **spawn_options)
         processes.append(host)
         info = wait_file(host_info, host)
-        remote = Remote(f'https://127.0.0.1:{info["port"]}', pinned_context(info['certificate']), 'Local package test', info['code'], 'disposable-package-test-password')
+        owner_secret = saved_owner_secret(root / '.build')
+        assert owner_secret, 'Private owner credential required for packaged-host verification'
+        remote = Remote(f'https://127.0.0.1:{info["port"]}', pinned_context(info['certificate']), 'Local package test', '', secrets.token_urlsafe(32), 'Connor-test', owner_secret)
         health = remote.pair()
-        assert health['platform'] == platform_name and health['version'] == '3.0.2-preview'
+        assert health['platform'] == platform_name and health['version'] == VERSION
         remote.json('/terminal', 'POST')
         time.sleep(.5)
         if os.name == 'nt':
@@ -61,7 +67,11 @@ with tempfile.TemporaryDirectory(prefix='roomcam-exe-check-') as scratch:
         remote.stop()
         print(f'PASS actual {platform_name} host startup, encrypted pairing, shell and cleanup', flush=True)
 
-        listener = subprocess.Popen([str(platform_dir / ('dist/viewer' + suffix)), '--no-browser', '--session-file', str(listener_info), '--data-dir', str(scratch / 'profiles')], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **spawn_options)
+        viewer_data = scratch / 'profiles'
+        viewer_data.mkdir(mode=0o700)
+        shutil.copyfile(root / '.build/owner-password.txt', viewer_data / 'owner-password.txt')
+        os.chmod(viewer_data / 'owner-password.txt', 0o600)
+        listener = subprocess.Popen([str(platform_dir / ('dist/viewer' + suffix)), '--no-browser', '--session-file', str(listener_info), '--data-dir', str(viewer_data)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **spawn_options)
         processes.append(listener)
         listener_data = wait_file(listener_info, listener)
         url, fragment = listener_data['url'].split('#', 1)
@@ -69,13 +79,15 @@ with tempfile.TemporaryDirectory(prefix='roomcam-exe-check-') as scratch:
         browser = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
         page = browser.open(url).read().decode()
         assert 'Control center' in page
-        assert 'Host code or fallback details' not in page and 'profile-form' in page
+        assert 'Host code or fallback details' not in page and 'profile-form' not in page and 'Private connection password' in page
         assert "data:text/css" not in browser.open(url + 'assets/control.css').read().decode()
         for asset in ('control.js', 'control.css', 'xterm.js', 'xterm.css', 'favicon.svg'):
             assert browser.open(url + 'assets/' + asset).status == 200
         bootstrap = urllib.request.Request(url + 'bootstrap', data=json.dumps({'token': token}).encode(), headers={'Content-Type': 'application/json'}, method='POST')
         csrf = json.loads(browser.open(bootstrap).read())['csrf']
         assert json.loads(browser.open(url + 'connection').read())['connected'] is False
+        settings = json.loads(browser.open(url + 'owner-settings').read())
+        assert settings == dict(saved=True)
         synthetic_session = platform_dir / ('.build/cross-windows.json' if os.name == 'nt' else '.build/cross-linux.json')
         if synthetic_session.exists() and not synthetic_session.with_suffix('.stop').exists():
             fixture = json.loads(synthetic_session.read_text())

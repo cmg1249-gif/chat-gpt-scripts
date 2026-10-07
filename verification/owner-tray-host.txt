@@ -1,0 +1,1 @@
+PASS actual Windows tray entry point accepts owner login, leaves capture/shell off and exits normally without headless mode

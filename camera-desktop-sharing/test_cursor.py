@@ -16,13 +16,38 @@ import viewer
 @unittest.skipUnless(sys.platform == 'win32', 'Windows cursor rendering')
 class CursorTests(unittest.TestCase):
     def setUp(self):
-        load = cursor._bind(cursor._user, 'LoadCursorW',
-                            [wt.HINSTANCE, ct.c_void_p], wt.HANDLE)
-        self.handle = load(None, ct.c_void_p(32512))
+        # Stock cursors can be transparent in a VM/automation environment or
+        # custom pointer theme. Use real native cursors with known test pixels.
+        self.handle = self.native_cursor('arrow')
         self.assertTrue(self.handle)
         self.position = (80, 60)
         self.flags = 1
         self.bounds = dict(left=0, top=0, width=240, height=160)
+
+    def native_cursor(self, kind):
+        and_mask = np.ones((32, 32), dtype=np.uint8)
+        xor_mask = np.zeros((32, 32), dtype=np.uint8)
+        if kind == 'arrow':
+            for y in range(24):
+                for x in range(y // 2 + 1):
+                    and_mask[y, x] = 0
+                    xor_mask[y, x] = int(0 < x < y // 2 and y < 23)
+        elif kind == 'ibeam':
+            and_mask[2:26, 10:13] = 0
+            and_mask[2:5, 5:18] = 0
+            and_mask[23:26, 5:18] = 0
+        else:
+            # AND=1/XOR=1 inverts the destination, exercising monochrome XOR.
+            xor_mask[4:24, 4:24] = 1
+        create = cursor._bind(cursor._user, 'CreateCursor',
+            [wt.HINSTANCE, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_void_p, ct.c_void_p], wt.HANDLE)
+        destroy = cursor._bind(cursor._user, 'DestroyCursor', [wt.HANDLE], wt.BOOL)
+        packed_and = ct.create_string_buffer(np.packbits(and_mask, axis=1).tobytes())
+        packed_xor = ct.create_string_buffer(np.packbits(xor_mask, axis=1).tobytes())
+        handle = create(None, 0, 0, 32, 32, packed_and, packed_xor)
+        self.assertTrue(handle)
+        self.addCleanup(destroy, handle)
+        return handle
 
     def get_cursor(self, pointer):
         info = ct.cast(pointer, ct.POINTER(cursor.CURSORINFO)).contents
@@ -37,9 +62,9 @@ class CursorTests(unittest.TestCase):
         with patch.object(cursor, '_get_cursor', side_effect=self.get_cursor):
             return cursor.draw_cursor(frame, bounds or self.bounds)
 
-    def test_native_arrow_and_ibeam_change_only_cursor_region(self):
-        for resource in (32512, 32513, 32649):
-            self.handle = cursor._user.LoadCursorW(None, ct.c_void_p(resource))
+    def test_native_arrow_ibeam_and_xor_change_only_cursor_region(self):
+        for kind in ('arrow', 'ibeam', 'xor'):
+            self.handle = self.native_cursor(kind)
             image = self.render()
             changed = np.any(image != 110, axis=2)
             self.assertGreater(changed.sum(), 5)

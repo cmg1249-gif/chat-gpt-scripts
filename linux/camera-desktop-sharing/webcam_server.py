@@ -703,7 +703,7 @@ def report_fatal(summary, detail="", title="Ducky Cam Web could not start"):
     The host is built with --noconsole, so a problem has nowhere to print and
     the app just sits there doing nothing -- which is exactly what a broken
     tunnel or a bad config used to look like. Write the details to a log beside
-    the exe and pop up a dialog.
+    the exe. The tray control-center mode never opens an error dialog.
     """
     path = os.path.join(os.path.dirname(_config_path()), "roomcam_error.log")
     stamp = f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S}"
@@ -714,7 +714,7 @@ def report_fatal(summary, detail="", title="Ducky Cam Web could not start"):
         path = "(could not write a log file)"
     if sys.stdout is not None:
         print(f"{summary}\n{detail}")
-    if not _has_console():
+    if '--legacy' in sys.argv and not _has_console():
         try:
             import tkinter as tk
             from tkinter import messagebox

@@ -1,0 +1,12 @@
+03:05:28  No camera: using desktop video instead.
+[viewer] RECORDING -> roomcam_20261007_030528.mp4
+[viewer] saved <temporary-directory>
+[viewer] RECORDING -> roomcam_20261007_030528.mp4
+[viewer] saved <temporary-directory>
+03:05:28  Camera turned OFF.
+----------------------------------------------------------------------
+Ran 34 tests in 0.938s
+
+OK
+[viewer] RECORDING -> roomcam_20261007_030528.mp4
+[viewer] saved <temporary-directory>

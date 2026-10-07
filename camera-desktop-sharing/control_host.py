@@ -1,6 +1,7 @@
 """Zero-configuration host: encrypted LAN + public tunnel, listener-owned setup."""
 import atexit
 import hmac
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -11,6 +12,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.parse
 
 from flask import jsonify, request
 from werkzeug.serving import make_server
@@ -18,14 +20,17 @@ from connection import Tunnel
 from control_protocol import APP, PORT, Discovery, make_certificate, new_code, sign, topic_for, relay_url, connection_details
 from control_terminal import Terminal
 from control_profiles import VERSION, read_host_profile
+from control_owner import OwnerAuth, owner_topic, session_proof
+from control_owner_public import OWNER_PUBLIC_KEY
 
 
 
 class ControlHost:
-    def __init__(self, server, profile=None):
+    def __init__(self, server, profile=None, owner_public=None):
         self.server = server
         self.profile = profile
         self.code = profile['code'] if profile else new_code()
+        self.owner_auth = OwnerAuth(owner_public, server.session_id) if owner_public else None
         if profile:
             server.PASSWORD = profile['password']
         self.terminal = Terminal()
@@ -38,12 +43,14 @@ class ControlHost:
         self.install_routes()
 
     def identity(self, nonce=''):
-        return sign(dict(app=APP, version=VERSION, host=platform.node(), platform=platform.system(),
+        return sign(dict(app=APP, version=VERSION, owner=self.owner_auth.public if self.owner_auth else None, host=platform.node(), platform=platform.system(),
                          port=self.port, certificate=self.certificate, nonce=nonce,
                          created=int(time.time())), self.code)
 
     def advert(self, url):
         data = dict(app=APP, version=VERSION, url=url, created=int(time.time()), session=self.server.session_id)
+        if self.owner_auth:
+            data['owner'] = self.owner_auth.public
         if relay_url(url):
             data['certificate'] = self.certificate
         return sign(data, self.code)
@@ -54,12 +61,31 @@ class ControlHost:
             return None
         return connection_details(self.code, [self.advert(url) for url in urls])
 
+    def endpoint_allowed(self, endpoint):
+        if not isinstance(endpoint, str):
+            return False
+        if self.tunnel and endpoint in self.tunnel.urls:
+            return True
+        try:
+            url = urllib.parse.urlsplit(endpoint)
+            if url.scheme != 'https' or url.path or url.query or url.fragment or url.username or url.password or url.port != self.port:
+                return False
+            ipaddress.IPv4Address(url.hostname)
+            # LAN endpoints are bound to this port and this host's TLS key.
+            # The viewer checks the pinned certificate before signing a login.
+            # Hostname DNS is not an interface inventory (notably on Linux/WSL).
+            return True
+        except (ValueError, OSError, TypeError):
+            return False
+
     def install_routes(self):
         app, server = self.server.app, self.server
 
         def protect():
             if request.path == '/control/identity':
                 return None
+            if self.owner_auth and request.path in ('/pair-info', '/pair'):
+                return jsonify(error='Use your private viewer password.'), 403
             if request.path in ('/pair-info', '/pair'):
                 code = request.headers.get('X-RoomCam-Code', '')
                 if not hmac.compare_digest(code.encode(), self.code.encode()):
@@ -69,12 +95,50 @@ class ControlHost:
             if request.method != 'GET':
                 if request.headers.get('X-RoomCam-Control') != '1' or request.headers.get('Origin'):
                     return jsonify(error='Use the RoomCam listener to control this host.'), 403
-            if request.path not in ('/pair-info', '/pair') and not server.is_authorized(request.authorization):
+            public = ('/pair-info', '/pair') if not self.owner_auth else ('/owner-challenge', '/owner-auth')
+            if request.path not in public and not server.is_authorized(request.authorization):
                 return jsonify(error='Pair this host from the listener first.'), 401
             return None
 
         # Replace the legacy first-claim pairing gate for this new entry point.
         app.before_request_funcs[None] = [protect]
+
+        @app.get('/owner-challenge')
+        def owner_challenge():
+            if not self.owner_auth:
+                return jsonify(error='Owner login unavailable'), 404
+            try:
+                endpoint = request.args.get('endpoint', '')
+                if not self.endpoint_allowed(endpoint):
+                    return jsonify(error='This address is not a route to this host.'), 403
+                challenge = self.owner_auth.challenge(endpoint, self.certificate)
+                if server.PASSWORD:
+                    challenge['connection_proof'] = session_proof(challenge, server.PASSWORD)
+                return jsonify(challenge)
+            except RuntimeError as exc:
+                return jsonify(error=str(exc)), 429
+
+        @app.post('/owner-auth')
+        def owner_auth():
+            if not self.owner_auth:
+                return jsonify(error='Owner login unavailable'), 404
+            try:
+                payload = request.get_json(silent=True)
+                if not isinstance(payload, dict) or not self.endpoint_allowed(payload.get('endpoint')) or payload.get('certificate') != self.certificate:
+                    raise ValueError('Login destination does not match this host.')
+                username, password = self.owner_auth.accept(payload)
+            except ValueError as exc:
+                return jsonify(error=str(exc)), 403
+            with server.pair_lock:
+                self.terminal.close('Viewer connected')
+                server.stop_camera()
+                server.stop_mic()
+                server.desktop_wanted = False
+                server.camera_wanted = False
+                server.mixer.set_desktop(False)
+                server.USERNAME, server.PASSWORD = username, password
+            server.log('Private owner viewer connected.')
+            return jsonify(ok=True, code=self.code)
 
         @app.get('/control/identity')
         def identity():
@@ -126,70 +190,64 @@ class ControlHost:
 
 
 def show_host(control, stop, headless=False):
-    code = '-'.join(control.code[i:i+5] for i in range(0, len(control.code), 5))
+    """Keep normal operation in the tray; never open a pairing window."""
     if headless:
         print('RoomCam sharing host ' + VERSION, flush=True)
-        print('Prepared by your viewer; no host setup needed.' if control.profile else 'Pairing code: ' + code, flush=True)
         stop.wait()
         return
-    try:
-        import tkinter as tk
-        root = tk.Tk()
-    except Exception:
-        if sys.stdout is None:
-            raise RuntimeError('Cannot show the host pairing code. A graphical desktop is required.')
-        print('RoomCam: prepared by your viewer.' if control.profile else 'RoomCam pairing code: ' + code, flush=True)
-        stop.wait()
-        return
-    root.title('RoomCam · Sharing host')
-    root.geometry('680x450')
-    root.configure(bg='#111827')
-    if control.profile:
-        tk.Label(root, text=control.profile['name'], bg='#111827', fg='white', font=('Segoe UI', 20)).pack(pady=(25, 10))
-        tk.Label(root, text='Ready for your viewer. No setup needed here.', bg='#111827', fg='#aebed0').pack(pady=15)
-        tk.Label(root, text='Camera, audio and terminal are controlled from your viewer.', bg='#111827', fg='#aebed0').pack(pady=15)
-    else:
-        tk.Label(root, text='RoomCam is ready to pair', bg='#111827', fg='white', font=('Segoe UI', 20)).pack(pady=(25, 10))
-        tk.Label(root, text='For hands-free setup, create a host package in your viewer.', bg='#111827', fg='#aebed0').pack()
-        entry = tk.Entry(root, justify='center', font=('Consolas', 17), width=36)
-        entry.insert(0, code)
-        entry.configure(state='readonly')
-        entry.pack(pady=15)
-        def copy():
-            root.clipboard_clear()
-            root.clipboard_append(code)
-        tk.Button(root, text='Copy manual pairing code', command=copy).pack()
-    label = tk.Label(root, text='', bg='#111827', fg='#8de8c1', wraplength=580)
-    label.pack(pady=15)
-    def close():
+    import pystray
+    from PIL import Image, ImageDraw
+    image = Image.new('RGB', (64, 64), '#172b3a')
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((10, 12, 54, 45), outline='#65e3a0', width=4)
+    draw.ellipse((24, 22, 40, 38), fill='#65e3a0')
+
+    def close(icon, item=None):
         stop.set()
-        root.destroy()
-    root.protocol('WM_DELETE_WINDOW', close)
-    tk.Button(root, text='Stop sharing and close shell', command=close).pack()
-    def refresh():
-        if stop.is_set():
-            root.destroy()
-            return
-        shell = ' · SHELL ACTIVE' if control.terminal.read()['running'] else ''
-        paired = 'Paired' if control.server.PASSWORD else 'Waiting for listener'
-        internet = control.tunnel.status if control.tunnel else control.internet_status
-        label.configure(text=f'{paired}{shell}\nLAN: {control.lan_status} · Internet: {internet}')
-        root.after(1000, refresh)
-    refresh()
-    root.mainloop()
+        icon.stop()
+
+    icon = pystray.Icon('roomcam-control', image, 'RoomCam starting',
+        menu=pystray.Menu(pystray.MenuItem('Stop sharing and close shell', close, default=True)))
+    failures = []
+
+    def setup(tray):
+        try:
+            tray.visible = True
+            while not stop.is_set():
+                shell = control.terminal.read()['running']
+                server = control.server
+                capture = (server.camera is not None or server.desktop_wanted or
+                           server.mic_stream is not None or server.mixer.desktop_subscription is not None)
+                state = 'SHELL ACTIVE' if shell else ('Capture active' if capture else 'Capture off')
+                paired = 'Paired' if server.PASSWORD else 'Waiting for viewer'
+                tray.title = f'RoomCam - {paired} - {state}'
+                if stop.wait(.5):
+                    break
+        except Exception as exc:
+            failures.append(exc)
+        finally:
+            stop.set()
+            tray.stop()
+
+    try:
+        icon.run(setup=setup)
+        if failures:
+            raise RuntimeError('RoomCam could not display its tray status.') from failures[0]
+    finally:
+        stop.set()
+        icon.stop()
 
 
 def run(server):
     import argparse
     parser = argparse.ArgumentParser(description='RoomCam sharing host — all setup happens in the listener')
-    parser.add_argument('--headless', action='store_true', help='Show pairing code in the terminal instead of a window')
+    parser.add_argument('--headless', action='store_true', help='Run without a tray for command-line diagnostics')
     parser.add_argument('--local', action='store_true', help='Local diagnostic mode; no tunnel or LAN discovery')
     parser.add_argument('--session-file', help=argparse.SUPPRESS)
     parser.add_argument('--stop-after', type=float, default=0, help=argparse.SUPPRESS)
     args = parser.parse_args()
     directory = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).parent
-    profile = read_host_profile(directory)
-    control = ControlHost(server, profile)
+    control = ControlHost(server, owner_public=OWNER_PUBLIC_KEY)
     stop = server.shutdown
     atexit.register(control.close)
     web = lan = relay_web = discovery = None
@@ -210,7 +268,7 @@ def run(server):
             if not args.local:
                 if lan:
                     try:
-                        discovery = Discovery(control.code, control.identity)
+                        discovery = Discovery(control.code, control.identity, topic=owner_topic(OWNER_PUBLIC_KEY))
                     except OSError as exc:
                         server.log(f'Automatic LAN discovery unavailable: {exc}. Enter the host IP in the listener.')
                 if lan:
@@ -220,7 +278,7 @@ def run(server):
                     threading.Thread(target=relay_web.serve_forever, daemon=True).start()
                     relay_port = relay_web.server_port
                 from control_relay import InternetRoutes
-                control.tunnel = InternetRoutes(web.server_port, relay_port, topic_for(control.code), server.log, control.advert, server.session_id)
+                control.tunnel = InternetRoutes(web.server_port, relay_port, owner_topic(OWNER_PUBLIC_KEY), server.log, control.advert, server.session_id)
                 server.tunnel = control.tunnel
                 threading.Thread(target=control.tunnel.run, daemon=True).start()
             else:

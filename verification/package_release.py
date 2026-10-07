@@ -6,10 +6,10 @@ import tarfile
 import zipfile
 
 root = Path(__file__).resolve().parents[1]
-output = root / 'release-v3.0.2'
+output = root / 'release-v3.0.3'
 output.mkdir(exist_ok=True)
 docs = [(root / 'CONTROL-CENTER.md', 'README.md'),
-        (root / 'verification/HANDS-FREE.md', 'VALIDATION.md')]
+        (root / 'verification/OWNER-LOGIN.md', 'VALIDATION.md')]
 
 def sources(directory):
     files = list(directory.glob('*.py')) + list(directory.glob('*.html'))
@@ -29,7 +29,7 @@ for path, name in windows_binaries:
     shutil.copy2(path, output / name)
 shutil.copy2(windows / 'viewer.py', output / 'viewer.py')
 shutil.copy2(linux / 'dist/webcam_server.elf', output / 'webcam_server.elf')
-windows_zip = output / 'RoomCam_ControlCenter_v3.0.2.zip'
+windows_zip = output / 'RoomCam_ControlCenter_v3.0.3.zip'
 with zipfile.ZipFile(windows_zip, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
     for path, name in windows_binaries + docs + sources(windows):
         archive.write(path, name)
@@ -37,7 +37,7 @@ with zipfile.ZipFile(windows_zip) as archive:
     assert archive.testzip() is None
     for path, name in windows_binaries:
         assert hashlib.sha256(archive.read(name)).hexdigest() == digest(path)
-linux_tar = output / 'RoomCam_v3.0.2_linux_x86_64.tar.gz'
+linux_tar = output / 'RoomCam_v3.0.3_linux_x86_64.tar.gz'
 with tarfile.open(linux_tar, 'w:gz') as archive:
     for path, name in linux_binaries + docs + sources(linux):
         info = archive.gettarinfo(str(path), arcname='linux/' + name)

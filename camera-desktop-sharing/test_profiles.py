@@ -2,6 +2,7 @@ import io
 import json
 from pathlib import Path
 import tempfile
+import threading
 import types
 import unittest
 from unittest.mock import Mock, patch
@@ -9,7 +10,7 @@ import zipfile
 
 from flask import Flask
 from control_profiles import ProfileStore, HOST_SETTINGS, read_host_profile, write_host_package, host_binary, VERSION
-from control_host import ControlHost
+from control_host import ControlHost, show_host
 from control_listener import Listener
 
 
@@ -126,6 +127,50 @@ class ProfileRoutesTests(unittest.TestCase):
             with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
                 self.assertEqual(json.loads(archive.read(HOST_SETTINGS)), profile)
             response.close()
+
+
+class TrayTests(unittest.TestCase):
+    def test_tray_shows_activity_and_stops_on_host_shutdown(self):
+        for shell, capture, expected in [(False, False, 'Capture off'), (False, True, 'Capture active'), (True, False, 'SHELL ACTIVE')]:
+            with self.subTest(expected=expected):
+                shutdown = threading.Event()
+                tray = Mock()
+                pystray = Mock()
+                pystray.Icon.return_value = tray
+                tray.run.side_effect = lambda setup: setup(tray)
+                server = types.SimpleNamespace(PASSWORD='private-password', camera=None,
+                    desktop_wanted=capture, mic_stream=None, mixer=types.SimpleNamespace(desktop_subscription=None))
+                control = types.SimpleNamespace(server=server, terminal=Mock())
+                control.terminal.read.return_value = {'running': shell}
+                with patch.dict('sys.modules', {'pystray': pystray}), patch.object(shutdown, 'wait', side_effect=lambda delay: shutdown.set() or True):
+                    show_host(control, shutdown)
+                self.assertTrue(tray.visible)
+                self.assertIn(expected, tray.title)
+                self.assertNotIn(server.PASSWORD, tray.title)
+                self.assertTrue(shutdown.is_set())
+                tray.stop.assert_called()
+                callback = pystray.MenuItem.call_args.args[1]
+                shutdown.clear()
+                callback(tray)
+                self.assertTrue(shutdown.is_set())
+
+    def test_tray_failure_stops_host_instead_of_running_invisibly(self):
+        shutdown = threading.Event()
+        pystray = Mock()
+        pystray.Icon.return_value.run.side_effect = RuntimeError('No tray backend')
+        with patch.dict('sys.modules', {'pystray': pystray}):
+            with self.assertRaisesRegex(RuntimeError, 'No tray backend'):
+                show_host(Mock(), shutdown)
+        self.assertTrue(shutdown.is_set())
+
+    def test_control_center_fatal_error_logs_without_opening_tkinter(self):
+        import webcam_server as server
+        tkinter = Mock()
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict('sys.modules', {'tkinter': tkinter}), patch.object(server, '_has_console', return_value=False), patch.object(server, '_config_path', return_value=str(Path(directory) / 'settings.ini')), patch('sys.argv', ['webcam_server']), patch('sys.stdout', new_callable=io.StringIO):
+                server.report_fatal('Test tray failure')
+            self.assertIn('Test tray failure', (Path(directory) / 'roomcam_error.log').read_text())
+        tkinter.Tk.assert_not_called()
 
 
 if __name__ == '__main__':

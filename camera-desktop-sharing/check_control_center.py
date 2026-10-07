@@ -31,7 +31,8 @@ def main():
         import unittest
         import test_control
         import test_profiles
-        suite = unittest.TestSuite([unittest.defaultTestLoader.loadTestsFromModule(test_control), unittest.defaultTestLoader.loadTestsFromModule(test_profiles)])
+        import test_owner
+        suite = unittest.TestSuite([unittest.defaultTestLoader.loadTestsFromModule(module) for module in (test_control, test_profiles, test_owner)])
         result = unittest.TextTestRunner(verbosity=2).run(suite)
         raise SystemExit(not result.wasSuccessful())
     output = Path(args.output)
@@ -99,7 +100,7 @@ def main():
                 except urllib.error.HTTPError as exc:
                     assert exc.code == 403
                 health = remote.pair()
-                assert health['version'] == '3.0.2-preview'
+                assert health['version'] == '3.0.3-preview'
                 print('PASS verified TLS and listener-owned pairing; wrong code rejected', flush=True)
                 remote.open_stream = remote.open
                 remote.json('/source/select?source=camera', 'POST')

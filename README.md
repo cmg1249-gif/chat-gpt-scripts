@@ -6,11 +6,11 @@ A collection of scripts and experimental projects built with ChatGPT.
 
 Learn binary, IPv4, subnetting, and the OSI model while reclaiming networks from an AI overlord. [Bitforge instructions and editable source](games/bitforge/) include **Version 1 Classic** and **Version 2 World Campaign**. [Download both versions](https://github.com/cmg1249-gif/chat-gpt-scripts/releases/tag/bitforge-v1-v2): download an HTML game, then open it in your browser. No Python, installation, or account is needed.
 
-## RoomCam Control Center — v3.0.2 preview
+## RoomCam Control Center — v3.0.3 preview
 
-[Download the Windows and Linux release](https://github.com/cmg1249-gif/chat-gpt-scripts/releases/tag/v3.0.2). The browser dashboard includes camera/desktop viewing, audio controls, and an authenticated PowerShell/Bash terminal on the sharing computer. LAN port 2220, Cloudflare, and an independent Pinggy TLS relay provide connection options.
+[Download the Windows and Linux release](https://github.com/cmg1249-gif/chat-gpt-scripts/releases/tag/v3.0.3). The browser dashboard includes camera/desktop viewing, audio controls, and an authenticated PowerShell/Bash terminal on the sharing computer. LAN port 2220, Cloudflare, and an independent Pinggy TLS relay provide connection options.
 
-**Start with the viewer.** Create a private host package in its browser dashboard, extract that package on the sharing computer, and run `webcam_server`. Select the saved computer in the viewer and connect: no host code, password entry, or copying details back. See [setup instructions](CONTROL-CENTER.md) and [verification and limits](verification/HANDS-FREE.md). Replace older hosts with the new prepared package.
+Run **webcam_server** on the sharing computer; it stays in the system tray. In **viewer**, use your username and private owner password. No host pairing window, code, approval click or generated host package is needed. This owner build embeds only the public verification key; the matching private credential is supplied separately to the owner and is never included in public downloads. See [setup instructions](CONTROL-CENTER.md) and [verification and limits](verification/OWNER-LOGIN.md).
 
 ## Find your program
 

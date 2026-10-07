@@ -18,20 +18,26 @@ import webbrowser
 
 from flask import Flask, Response, jsonify, request, send_from_directory, send_file
 from werkzeug.serving import make_server
-from control_protocol import APP, direct_candidate, find_lan, normalize_code, topic_for, tunnel_url, verified, internet_candidate, parse_connection_details
+from control_protocol import APP, direct_candidate, find_lan, normalize_code, topic_for, tunnel_url, verified, internet_candidate, parse_connection_details, owner_internet_candidate
+from control_owner import owner_public, owner_topic, sign_login, saved_owner_secret, valid_username, session_proof
+from control_owner_public import OWNER_PUBLIC_KEY
 from tls import HTTPS_CONTEXT
 from control_profiles import VERSION, ProfileStore, data_directory, host_binary, write_host_package
 
 
 class Remote:
-    def __init__(self, base, context, route, code, password):
+    def __init__(self, base, context, route, code, password, username='admin', owner_secret=None, previous_password=None):
         self.base, self.context, self.route = base, context, route
         self.code = code
-        self.auth = 'Basic ' + base64.b64encode(('admin:' + password).encode()).decode()
+        self.username, self.owner_secret = username, owner_secret
+        self.auth = 'Basic ' + base64.b64encode((username + ':' + password).encode()).decode()
         self.password = password
+        self.previous_password = previous_password
 
     def open(self, path, method='GET', data=None, pairing=False):
         headers = {'Authorization': self.auth, 'X-RoomCam-Control': '1'}
+        if path.split('?', 1)[0] in ('/owner-challenge', '/owner-auth'):
+            headers.pop('Authorization')
         if pairing:
             headers['X-RoomCam-Code'] = self.code
         if data is not None:
@@ -50,6 +56,40 @@ class Remote:
             return json.loads(response.read(1048576))
 
     def pair(self):
+        if self.owner_secret:
+            for attempt in range(3):
+                try:
+                    challenge = self.json('/owner-challenge?endpoint=' + urllib.parse.quote(self.base, safe=''))
+                    break
+                except urllib.error.HTTPError as exc:
+                    if exc.code not in (502, 503, 504) or attempt == 2:
+                        raise
+                except urllib.error.URLError as exc:
+                    if isinstance(exc.reason, ssl.SSLError) or attempt == 2:
+                        raise
+                time.sleep(1 + attempt)
+            if challenge.get('owner') != owner_public(self.owner_secret):
+                raise ValueError('Host does not accept your private connection password.')
+            if challenge.get('endpoint') != self.base:
+                raise ValueError('Host login belongs to a different destination.')
+            if not tunnel_url(self.base):
+                # LAN and Pinggy must terminate TLS at the same host that
+                # decrypts this login. A forwarded challenge cannot authorize
+                # a proxy holding a different TLS certificate.
+                certificates = self.context.get_ca_certs(binary_form=True)
+                expected = ssl.PEM_cert_to_DER_cert(challenge.get('certificate', ''))
+                if len(certificates) != 1 or certificates[0] != expected:
+                    raise ValueError('Login host certificate does not match this connection.')
+            proof = challenge.get('connection_proof', '')
+            if self.previous_password and isinstance(proof, str) and hmac.compare_digest(proof, session_proof(challenge, self.previous_password)):
+                self.password = self.previous_password
+                self.auth = 'Basic ' + base64.b64encode((self.username + ':' + self.password).encode()).decode()
+                self.previous_password = None
+                return self.json('/control/status')
+            payload = sign_login(self.owner_secret, challenge, self.username, self.password)
+            result = self.json('/owner-auth', 'POST', payload)
+            self.code = normalize_code(result['code'])
+            return self.json('/control/status')
         try:
             # Retry only the read-only handshake; never replay a shell command.
             for attempt in range(3):
@@ -78,11 +118,11 @@ class Remote:
                 pass
 
 
-def find_internet(code, wait=0):
+def find_internet(code, wait=0, owner=None):
     deadline = time.monotonic() + wait
     while True:
         try:
-            found = _internet_snapshot(code)
+            found = _internet_snapshot(code, owner) if owner else _internet_snapshot(code)
         except (OSError, ValueError):
             if time.monotonic() >= deadline:
                 raise
@@ -92,8 +132,8 @@ def find_internet(code, wait=0):
         time.sleep(3)
 
 
-def _internet_snapshot(code):
-    url = f'https://ntfy.sh/{topic_for(code)}/json?poll=1&since=2m'
+def _internet_snapshot(code, owner=None):
+    url = f'https://ntfy.sh/{owner_topic(owner) if owner else topic_for(code)}/json?poll=1&since=2m'
     with urllib.request.urlopen(url, context=HTTPS_CONTEXT, timeout=8) as response:
         lines = response.read(262144).decode().splitlines()
     candidates = []
@@ -101,7 +141,7 @@ def _internet_snapshot(code):
         try:
             event = json.loads(line)
             data = json.loads(event.get('message', '{}'))
-            item = internet_candidate(data, code)
+            item = owner_internet_candidate(data, owner) if owner else internet_candidate(data, code)
             if item[0] not in [c[0] for c in candidates]:
                 candidates.append(item)
         except (ValueError, AttributeError, TypeError):
@@ -137,7 +177,7 @@ class Listener:
             self.recovery_after = time.monotonic() + 15
             candidates = list(self.candidates)
             try:
-                candidates.extend(find_internet(previous.code))
+                candidates.extend(find_internet(previous.code, owner=owner_public(previous.owner_secret)) if previous.owner_secret else find_internet(previous.code))
             except (OSError, ValueError):
                 pass
             seen = {previous.base}
@@ -145,7 +185,10 @@ class Listener:
                 if base in seen:
                     continue
                 seen.add(base)
-                replacement = Remote(base, context, route, previous.code, previous.password)
+                # An untrusted discovery candidate must never receive an API
+                # password from a different route. Every owner login rotates it.
+                replacement = (Remote(base, context, route, previous.code, secrets.token_urlsafe(32), previous.username, previous.owner_secret, previous_password=previous.password)
+                    if previous.owner_secret else Remote(base, context, route, previous.code, previous.password))
                 try:
                     status = replacement.pair()
                     if status.get('version') != VERSION:
@@ -214,13 +257,21 @@ class Listener:
                 data = request.get_json(silent=True)
                 if not isinstance(data, dict):
                     raise ValueError('Expected connection settings.')
+                owner_secret, owner, username = None, None, 'admin'
                 if data.get('profile'):
                     profile = self.profiles.get(data['profile'])
                     code, password, supplied = profile['code'], profile['password'], []
-                else:
+                elif data.get('code'):
                     raw_code = data.get('code', '')
                     code, supplied = parse_connection_details(raw_code.strip() if isinstance(raw_code, str) else raw_code)
                     password = data.get('password', '')
+                else:
+                    username = valid_username(data.get('username', 'admin'))
+                    owner_secret = data.get('password') or (saved_owner_secret(self.profiles.directory) if self.profiles.directory else None)
+                    owner = owner_public(owner_secret)
+                    if owner != OWNER_PUBLIC_KEY:
+                        raise ValueError('That private connection password does not match this host release.')
+                    code, password, supplied = '', secrets.token_urlsafe(32), []
                 if not isinstance(password, str) or not 8 <= len(password) <= 128:
                     raise ValueError('Choose a password with 8–128 characters.')
                 mode = data.get('mode', 'auto')
@@ -230,12 +281,12 @@ class Listener:
                 if mode != 'internet':
                     if data.get('address'):
                         try:
-                            candidates.append(direct_candidate(data['address'].strip(), code))
+                            candidates.append(direct_candidate(data['address'].strip(), code, owner=owner) if owner else direct_candidate(data['address'].strip(), code))
                         except (OSError, ValueError) as exc:
                             errors.append('Direct LAN: ' + str(exc))
                     else:
                         try:
-                            candidates.extend(find_lan(code))
+                            candidates.extend(find_lan(code, owner=owner) if owner else find_lan(code))
                         except OSError as exc:
                             errors.append('LAN discovery: ' + str(exc))
                 # Prefer LAN, then discover internet only if needed.
@@ -244,13 +295,14 @@ class Listener:
                         if mode == 'lan':
                             break
                         try:
-                            candidates = supplied or find_internet(code, wait=15)
+                            candidates = supplied or (find_internet(code, wait=15, owner=owner) if owner else find_internet(code, wait=15))
                         except (OSError, ValueError) as exc:
                             errors.append('Internet discovery: ' + str(exc))
                             candidates = []
                     for base, context, route in candidates:
                         try:
-                            remote = Remote(base, context, route, code, password)
+                            remote = (Remote(base, context, route, code, secrets.token_urlsafe(32), username, owner_secret)
+                                if owner_secret else Remote(base, context, route, code, password))
                             status = remote.pair()
                             if status.get('version') != VERSION:
                                 raise ValueError('Incompatible host. Install the matching control-center host and listener.')
@@ -260,7 +312,7 @@ class Listener:
                             return jsonify(connected=True, route=route, host=status['host'], platform=status['platform'], version=status['version'])
                         except urllib.error.HTTPError as exc:
                             if exc.code in (401, 403):
-                                errors.append('Pairing code or session password was rejected. Use the matching code/password or restart the host.')
+                                errors.append('Viewer authorization was rejected. Use your private connection password.')
                             elif exc.code == 404:
                                 errors.append('Incompatible host: control-center endpoint missing. Update both applications.')
                             else:
@@ -268,12 +320,20 @@ class Listener:
                         except (OSError, ValueError, KeyError) as exc:
                             errors.append(route + ': ' + str(exc))
                     candidates = []
-                return jsonify(error='Could not connect. Make sure the prepared host package is running. ' + ' '.join(errors[-3:]),
+                return jsonify(error='Could not connect. Make sure webcam_server is running. ' + ' '.join(errors[-3:]),
                                hint='LAN uses port 2220. Internet routes use Cloudflare or Pinggy. The host needs no code or password entry.'), 503
             except (ValueError, OSError) as exc:
                 return jsonify(error=str(exc)), 400
             finally:
                 self.connect_lock.release()
+
+        @app.get('/owner-settings')
+        def owner_settings():
+            try:
+                secret = saved_owner_secret(self.profiles.directory) if self.profiles.directory else None
+                return jsonify(saved=bool(secret and owner_public(secret) == OWNER_PUBLIC_KEY))
+            except (OSError, ValueError):
+                return jsonify(saved=False)
 
         @app.get('/profiles')
         def profiles():

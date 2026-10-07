@@ -1,0 +1,8 @@
+PASS actual Linux host startup, encrypted pairing, shell and cleanup
+PASS actual Linux viewer startup, bundled UI assets, bootstrap and authenticated status
+PASS actual viewer username/password login, capture off, shell and disconnect: Local network
+PASS actual viewer username/password login, capture off, shell and disconnect: Local network
+PASS restart of both executables with viewer-only saved credential; no host settings package
+PASS first-ever owner internet login, shell and session recovery: Cloudflare
+PASS first-ever owner internet login, shell and session recovery: Pinggy encrypted relay
+PASS actual viewer username/password login, capture off, shell and disconnect: Cloudflare

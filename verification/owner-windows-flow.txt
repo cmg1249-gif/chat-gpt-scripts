@@ -1,0 +1,3 @@
+PASS actual viewer username/password login, capture off, shell and disconnect: Local network
+PASS actual viewer username/password login, capture off, shell and disconnect: Local network
+PASS restart of both executables with viewer-only saved credential; no host settings package

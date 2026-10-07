@@ -144,7 +144,7 @@ class ListenerTests(unittest.TestCase):
     def test_local_success_does_not_require_internet_discovery(self):
         self.login()
         remote = Mock()
-        remote.pair.return_value = dict(host='Test host', platform='Windows', version='3.0.2-preview')
+        remote.pair.return_value = dict(host='Test host', platform='Windows', version='3.0.3-preview')
         with patch('control_listener.find_lan', return_value=[('https://127.0.0.1:2220', None, 'Local network')]), patch('control_listener.find_internet') as internet, patch('control_listener.Remote', return_value=remote):
             result = self.client.post('/connect', json=dict(code=protocol.new_code(), password='password'), headers=self.headers)
         self.assertEqual(result.status_code, 200)
@@ -153,7 +153,7 @@ class ListenerTests(unittest.TestCase):
     def test_auto_falls_back_to_internet(self):
         self.login()
         remote = Mock()
-        remote.pair.return_value = dict(host='Test host', platform='Linux', version='3.0.2-preview')
+        remote.pair.return_value = dict(host='Test host', platform='Linux', version='3.0.3-preview')
         with patch('control_listener.find_lan', return_value=[]), patch('control_listener.find_internet', return_value=[('https://test-host-demo.trycloudflare.com', None, 'Internet tunnel')]), patch('control_listener.Remote', return_value=remote):
             result = self.client.post('/connect', json=dict(code=protocol.new_code(), password='password'), headers=self.headers)
         self.assertEqual(result.json['route'], 'Internet tunnel')
@@ -161,7 +161,7 @@ class ListenerTests(unittest.TestCase):
     def test_blocked_lan_discovery_still_tries_internet(self):
         self.login()
         remote = Mock()
-        remote.pair.return_value = dict(host='Test host', platform='Linux', version='3.0.2-preview')
+        remote.pair.return_value = dict(host='Test host', platform='Linux', version='3.0.3-preview')
         with patch('control_listener.find_lan', side_effect=OSError('UDP blocked')), patch('control_listener.find_internet', return_value=[('https://test-host-demo.trycloudflare.com', None, 'Cloudflare')]), patch('control_listener.Remote', return_value=remote):
             result = self.client.post('/connect', json=dict(code=protocol.new_code(), password='password'), headers=self.headers)
         self.assertEqual(result.status_code, 200)
@@ -170,7 +170,7 @@ class ListenerTests(unittest.TestCase):
         self.login()
         failed, fallback = Mock(), Mock()
         failed.pair.side_effect = urllib.error.URLError('Cloudflare unavailable')
-        fallback.pair.return_value = dict(host='Test host', platform='Linux', version='3.0.2-preview')
+        fallback.pair.return_value = dict(host='Test host', platform='Linux', version='3.0.3-preview')
         routes = [('https://test-host-demo.trycloudflare.com', None, 'Cloudflare'), ('https://sample-123456.run.pinggy-free.link', None, 'Pinggy encrypted relay')]
         with patch('control_listener.find_internet', return_value=routes), patch('control_listener.Remote', side_effect=[failed, fallback]):
             result = self.client.post('/connect', json=dict(code=protocol.new_code(), password='password', mode='internet'), headers=self.headers)
@@ -182,7 +182,7 @@ class ListenerTests(unittest.TestCase):
         code = protocol.new_code()
         details = protocol.connection_details(code, [protocol.sign(dict(app=protocol.APP, created=time.time(), url='https://sample-host-test.trycloudflare.com'), code)])
         remote = Mock()
-        remote.pair.return_value = dict(host='Test host', platform='Windows', version='3.0.2-preview')
+        remote.pair.return_value = dict(host='Test host', platform='Windows', version='3.0.3-preview')
         with patch('control_listener.find_internet') as discovery, patch('control_listener.Remote', return_value=remote):
             result = self.client.post('/connect', json=dict(code=details, password='password', mode='internet'), headers=self.headers)
         self.assertEqual(result.status_code, 200)
@@ -207,11 +207,11 @@ class ListenerTests(unittest.TestCase):
             recover.assert_not_called()
 
     def test_recovery_keeps_code_password_and_respects_disconnect(self):
-        old = Mock(base='https://old-host-test.trycloudflare.com', code=protocol.new_code(), password='session-password')
+        old = Mock(base='https://old-host-test.trycloudflare.com', code=protocol.new_code(), password='session-password', owner_secret=None)
         self.listener.remote = old
         self.listener.candidates = [('https://sample-123456.run.pinggy-free.link', None, 'Pinggy encrypted relay')]
         replacement = Mock()
-        replacement.pair.return_value = {'version': '3.0.2-preview'}
+        replacement.pair.return_value = {'version': '3.0.3-preview'}
         with patch('control_listener.find_internet', side_effect=OSError('discovery down')), patch('control_listener.Remote', return_value=replacement) as constructor:
             self.assertIs(self.listener.recover(old), replacement)
             self.assertEqual(constructor.call_args.args[-2:], (old.code, old.password))
@@ -315,7 +315,7 @@ class HostTests(unittest.TestCase):
         headers = self.pair()
         result = self.client.get('/control/status', headers=headers)
         self.assertEqual(result.status_code, 200)
-        self.assertEqual(result.json['version'], '3.0.2-preview')
+        self.assertEqual(result.json['version'], '3.0.3-preview')
         self.assertFalse(result.json['terminal'])
         self.assertEqual(self.client.get('/control/status', headers={'Authorization': 'Basic ' + base64.b64encode(b'admin:wrong').decode()}).status_code, 401)
 

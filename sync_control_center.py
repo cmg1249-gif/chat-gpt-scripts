@@ -5,7 +5,7 @@ import shutil
 root = Path(__file__).parent
 source = root / 'camera-desktop-sharing'
 target = root / 'linux/camera-desktop-sharing'
-for name in ('control_protocol.py', 'control_host.py', 'control_listener.py', 'control_terminal.py', 'control_relay.py', 'control_profiles.py', 'control.html', 'test_control.py', 'test_profiles.py', 'check_control_center.py'):
+for name in ('control_protocol.py', 'control_host.py', 'control_listener.py', 'control_terminal.py', 'control_relay.py', 'control_profiles.py', 'control_owner.py', 'control_owner_public.py', 'control.html', 'test_control.py', 'test_profiles.py', 'test_owner.py', 'check_control_center.py'):
     if (source / name).exists():
         shutil.copy2(source / name, target / name)
 shutil.copytree(source / 'assets', target / 'assets', dirs_exist_ok=True)

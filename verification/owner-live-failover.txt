@@ -1,0 +1,6 @@
+03:12:58  Private owner viewer connected.
+03:12:58  Listener opened the interactive shell.
+PASS primary server stopped: owner-authorized reads recovered through real Pinggy while discovery was unavailable
+PASS host challenge proved the existing session; active shell and API credentials were preserved
+03:13:03  Listener closed the interactive shell.
+PASS fallback disconnect closed the shell and capture

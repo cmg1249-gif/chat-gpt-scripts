@@ -53,42 +53,16 @@ async function refreshState() {
   if (state.audio_error) fail(state.audio_error);
 }
 async function refreshLogs() { const log = await remote('/logs'); $('logs').textContent = log.lines.join('\n') || 'No activity yet.'; }
-async function refreshProfiles(selected) {
-  const result = await api('/profiles');
-  const current = selected || $('profile-select').value;
-  options('profile-select', result.computers.map(item => ({id: item.id, name: item.name + ' · ' + item.platform})), current);
-  if (!result.computers.length) options('profile-select', [{id: '', name: 'Create a host package first'}], '');
-  $('connect').disabled = !result.computers.length; $('profile-download').disabled = !result.computers.length;
-}
-async function downloadHost() {
-  $('profile-download').disabled = true; $('profile-create').disabled = true;
-  $('notice').textContent = 'Preparing your private host package. The first download may take a little longer.';
-  try {
-    const result = await api('/profiles/' + $('profile-select').value + '/package', 'POST');
-    const link = document.createElement('a'); link.href = result.download; link.download = result.filename;
-    document.body.appendChild(link); link.click(); link.remove();
-    $('notice').textContent = 'Host package ready. Extract it on the sharing computer and run webcam_server. Then click Connect here.';
-  } finally { $('profile-download').disabled = false; $('profile-create').disabled = false; }
-}
-$('profile-form').onsubmit = async event => {
-  event.preventDefault(); clearError(); $('profile-create').disabled = true;
-  try {
-    const profile = await api('/profiles', 'POST', {name: $('profile-name').value, platform: $('profile-platform').value, password: $('profile-password').value});
-    $('profile-password').value = ''; await refreshProfiles(profile.id); await downloadHost();
-  } catch (error) { fail(error); }
-  finally { $('profile-create').disabled = false; }
-};
-action('profile-download', downloadHost);
 $('connect-form').onsubmit = async event => {
-  event.preventDefault(); clearError(); $('connect').disabled = true; $('connect').textContent = 'Connecting…'; $('connect-progress').textContent = 'Finding your host and verifying its identity…';
+  event.preventDefault(); clearError(); $('connect').disabled = true; $('connect').textContent = 'Connecting…'; $('connect-progress').textContent = 'Finding your host and authorizing your viewer…';
   try {
-    const info = await api('/connect', 'POST', {profile: $('profile-select').value, mode: $('mode').value, address: $('address').value});
+    const info = await api('/connect', 'POST', {username: $('username').value, password: $('password').value, mode: $('mode').value, address: $('address').value});
     setConnected(true, info);
     await refreshState();
     // Device scanning is explicit: it may briefly open cameras on some systems.
     const displays = await remote('/monitors'); options('monitor', displays.monitors.map(m => ({id: m.id, name: m.name + ' · ' + m.width + ' × ' + m.height})), displays.selected);
   } catch (e) { fail(e); }
-  finally { $('connect').disabled = false; $('connect').innerHTML = 'Connect to computer <span>→</span>'; $('connect-progress').textContent = 'Run its prepared host package, then connect. No host code needed.'; }
+  finally { $('connect').disabled = false; $('connect').innerHTML = 'Connect to computer <span>→</span>'; $('connect-progress').textContent = 'Run webcam_server, then connect. Local network first, internet fallback.'; }
 };
 function stopVideo() { viewing = false; $('feed').removeAttribute('src'); $('feed').hidden = true; $('empty-view').hidden = false; $('view-badge').textContent = 'Stopped'; $('view-badge').classList.remove('on'); $('view-detail').textContent = 'No video stream running'; $('start-view').textContent = 'Start viewing'; }
 async function startView() {
@@ -154,4 +128,4 @@ async function pollTerminal() {
 }
 window.addEventListener('resize', resizeTerminal); window.addEventListener('pagehide', stopListening);
 setInterval(pollTerminal, 200); setInterval(() => { if (connected) refreshState().catch(fail); }, 5000);
-(async () => { try { const token = new URLSearchParams(location.hash.slice(1)).get('launch') || ''; history.replaceState(null, '', '/'); const result = await api('/bootstrap', 'POST', {token}); csrf = result.csrf; await refreshProfiles(); const connection = await api('/connection'); if (connection.connected) { const health = await remote('/control/status'); setConnected(true, {...connection, ...health}); await refreshState(); } } catch (e) { $('connect').disabled = true; fail(e); } })();
+(async () => { try { const token = new URLSearchParams(location.hash.slice(1)).get('launch') || ''; history.replaceState(null, '', '/'); const result = await api('/bootstrap', 'POST', {token}); csrf = result.csrf; const settings = await api('/owner-settings'); if (settings.saved) { $('password').placeholder = 'Leave blank to use your saved private password'; $('saved-password').textContent = 'Your private password is saved on this viewer.'; } const connection = await api('/connection'); if (connection.connected) { const health = await remote('/control/status'); setConnected(true, {...connection, ...health}); await refreshState(); } } catch (e) { $('connect').disabled = true; fail(e); } })();
