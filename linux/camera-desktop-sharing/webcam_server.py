@@ -106,7 +106,7 @@ AUDIO_HEADER = struct.Struct("!dIH")
 # ---------------------------------------------------------------------------
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 4096
+app.config["MAX_CONTENT_LENGTH"] = 16384
 mixer = AudioMixer()
 video_source = "camera"
 monitor_id = 1
@@ -782,6 +782,10 @@ def _setting(cfg, key, convert, label):
 
 
 def main():
+    if '--legacy' not in sys.argv:
+        from control_host import run
+        return run(sys.modules[__name__])
+    sys.argv.remove('--legacy')
     global USERNAME, PASSWORD, NTFY_TOPIC, PORT, CAMERA_INDEX, MIC_DEVICE
     global SAMPLE_RATE, ENABLE_TUNNEL, VIDEO_FPS, JPEG_QUALITY, VIDEO_WIDTH
     global CAPTURE_WIDTH, CAPTURE_HEIGHT, ADAPTIVE

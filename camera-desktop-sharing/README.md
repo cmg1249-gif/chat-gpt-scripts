@@ -1,3 +1,5 @@
+> **Current release: [v3.0.1 Control Center](https://github.com/cmg1249-gif/chat-gpt-scripts/releases/tag/v3.0.1).** Use the matching new host and listener. Follow the [current setup instructions](../CONTROL-CENTER.md) for browser controls, pairing, terminal access, and connection fallbacks. The v2 instructions below describe the older release/legacy interface.
+
 # RoomCam: camera, desktop, microphone, and speaker audio
 
 ## Run from Python source

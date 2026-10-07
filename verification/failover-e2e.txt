@@ -1,0 +1,4 @@
+PASS real primary server stopped; authenticated read recovered over Pinggy while discovery was unavailable
+00:38:31  Listener closed the interactive shell.
+PASS copied signed connection details paired over the real relay with discovery unavailable
+00:38:34  Listener closed the interactive shell.

@@ -1,3 +1,5 @@
+> **Current release: [v3.0.1 Control Center](https://github.com/cmg1249-gif/chat-gpt-scripts/releases/tag/v3.0.1).** Use the matching new host and listener. Follow the [current setup instructions](../../CONTROL-CENTER.md) for browser controls, pairing, terminal access, and connection fallbacks. The v2 instructions below describe the older release/legacy interface.
+
 # Camera and desktop sharing for Linux
 
 Linux counterpart of the v2.0.2 Windows camera/desktop application. The server and viewer keep the existing pairing and media protocol. Use only on equipment you own or have permission to share, with the knowledge of anyone being captured.

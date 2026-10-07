@@ -1,0 +1,2 @@
+PASS actual Windows host startup, encrypted pairing, shell and cleanup
+PASS actual Windows viewer startup, bundled UI assets, bootstrap and authenticated status

@@ -1,0 +1,11 @@
+PASS signed internet discovery and Pinggy TLS relay
+PASS verified TLS and listener-owned pairing; wrong code rejected
+PASS: 12 frames (640x360)
+00:40:48  Camera turned OFF.
+PASS: 12 frames (640x360)
+PASS: 48000 Hz stereo, RMS 1060.2, tone 997 Hz
+00:40:55  Listener opened the interactive shell.
+PASS interactive shell through authenticated browser gateway
+00:40:58  Listener closed the interactive shell.
+PASS disconnect closes shell and all capture
+PASS wrong TLS certificate rejected

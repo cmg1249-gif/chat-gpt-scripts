@@ -1,0 +1,5 @@
+PASS win32 listener paired with Linux host
+PASS: 12 frames (640x360)
+PASS: 48000 Hz stereo, RMS 1060.2, tone 997 Hz
+PASS cross-platform interactive shell and generated video/audio
+PASS remote shell and capture cleanup

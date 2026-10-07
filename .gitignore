@@ -1,6 +1,12 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-linux/
+.linux-install.log
+.build-xterm.tgz
+camera-desktop-sharing/vendor/
+windows-build.log
+linux-build.log
 .build/
 bin/
 *.exe

@@ -33,6 +33,14 @@ Options (optional):
     --device N         speaker device index (see:  python -m sounddevice)
 """
 
+if __name__ == '__main__':
+    import sys
+    if '--legacy' not in sys.argv:
+        from control_listener import run
+        run()
+        raise SystemExit(0)
+    sys.argv.remove('--legacy')
+
 import argparse
 import base64
 import configparser

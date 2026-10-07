@@ -1,0 +1,30 @@
+PASS signed internet discovery and registered Cloudflare tunnel
+Traceback (most recent call last):
+  File "urllib\request.py", line 1344, in do_open
+  File "http\client.py", line 1319, in request
+  File "http\client.py", line 1365, in _send_request
+  File "http\client.py", line 1314, in endheaders
+  File "http\client.py", line 1074, in _send_output
+  File "http\client.py", line 1018, in send
+  File "http\client.py", line 1453, in connect
+  File "http\client.py", line 984, in connect
+  File "socket.py", line 828, in create_connection
+  File "viewer.py", line 151, in _getaddrinfo_with_fallback
+  File "socket.py", line 963, in getaddrinfo
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "check_control_center.py", line 162, in <module>
+  File "check_control_center.py", line 92, in main
+  File "control_listener.py", line 51, in pair
+  File "control_listener.py", line 46, in json
+  File "control_listener.py", line 43, in open
+  File "urllib\request.py", line 515, in open
+  File "urllib\request.py", line 532, in _open
+  File "urllib\request.py", line 492, in _call_chain
+  File "urllib\request.py", line 1392, in https_open
+  File "urllib\request.py", line 1347, in do_open
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>
+[viewer] specs-andrews-facing-organised.trycloudflare.com could not be resolved, by your network's DNS or by a public one.

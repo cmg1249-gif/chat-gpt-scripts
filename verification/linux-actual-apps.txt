@@ -1,0 +1,2 @@
+PASS actual Linux host startup, encrypted pairing, shell and cleanup
+PASS actual Linux viewer startup, bundled UI assets, bootstrap and authenticated status

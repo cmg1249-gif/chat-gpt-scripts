@@ -1,0 +1,38 @@
+test_audio_reconnect_does_not_reopen_speaker_capture (test_combined.CombinedTests.test_audio_reconnect_does_not_reopen_speaker_capture) ... ok
+test_audio_worker_waits_when_deadline_equals_clock_tick (test_combined.CombinedTests.test_audio_worker_waits_when_deadline_equals_clock_tick) ... ok
+test_browser_has_source_and_separate_audio_controls (test_combined.CombinedTests.test_browser_has_source_and_separate_audio_controls) ... ok
+test_bundled_ca_without_os_roots (test_combined.CombinedTests.test_bundled_ca_without_os_roots) ... ok
+23:40:09  No camera: using desktop video instead.
+test_camera_missing_falls_back_to_desktop (test_combined.CombinedTests.test_camera_missing_falls_back_to_desktop) ... ok
+test_control_calls_use_post (test_combined.CombinedTests.test_control_calls_use_post) ... ok
+test_delayed_audio_worker_does_not_burst_catchup_packets (test_combined.CombinedTests.test_delayed_audio_worker_does_not_burst_catchup_packets) ... ok
+test_desktop_audio_failure_leaves_video_available (test_combined.CombinedTests.test_desktop_audio_failure_leaves_video_available) ... ok
+test_desktop_refreshes_geometry_after_resize (test_combined.CombinedTests.test_desktop_refreshes_geometry_after_resize) ... ok
+test_invalid_monitor_does_not_change_source (test_combined.CombinedTests.test_invalid_monitor_does_not_change_source) ... ok
+test_invalid_pairing_is_rejected (test_combined.CombinedTests.test_invalid_pairing_is_rejected) ... ok
+test_listener_pairing_and_lost_response_retry (test_combined.CombinedTests.test_listener_pairing_and_lost_response_retry) ... ok
+test_mic_disabled_discards_callback (test_combined.CombinedTests.test_mic_disabled_discards_callback) ... ok
+test_mix_silence_and_packet_timestamps (test_combined.CombinedTests.test_mix_silence_and_packet_timestamps) ... ok
+test_mixing_keeps_both_sources_without_overflow (test_combined.CombinedTests.test_mixing_keeps_both_sources_without_overflow) ... ok
+test_monitor_names_from_current_mss_are_preserved (test_combined.CombinedTests.test_monitor_names_from_current_mss_are_preserved) ... ok
+test_new_endpoints_require_password (test_combined.CombinedTests.test_new_endpoints_require_password) ... ok
+test_pcm_resampling_preserves_stereo_and_sample_count (test_combined.CombinedTests.test_pcm_resampling_preserves_stereo_and_sample_count) ... ok
+test_rate_change_discards_old_format (test_combined.CombinedTests.test_rate_change_discards_old_format) ... ok
+test_recording_intermediate_preserves_pixels (test_combined.CombinedTests.test_recording_intermediate_preserves_pixels) ... ok
+test_recording_name_collision_does_not_overwrite (test_combined.CombinedTests.test_recording_name_collision_does_not_overwrite) ... ok
+test_recording_remains_playable_after_source_size_changes (test_combined.CombinedTests.test_recording_remains_playable_after_source_size_changes) ... ok
+test_server_does_not_prompt_or_store_a_password (test_combined.CombinedTests.test_server_does_not_prompt_or_store_a_password) ... ok
+[viewer] RECORDING -> roomcam_20261006_234010.mp4
+[viewer] saved <temporary-directory>/tmpo8rl9gxm\roomcam_20261006_234010.mp4
+[viewer] RECORDING -> roomcam_20261006_234010.mp4
+[viewer] saved <temporary-directory>/tmp4jbi98vj\roomcam_20261006_234010.mp4
+23:40:10  Camera turned OFF.
+test_signed_discovery_rejects_tampering (test_combined.CombinedTests.test_signed_discovery_rejects_tampering) ... ok
+test_status_keeps_wire_format_when_mic_rate_changes (test_combined.CombinedTests.test_status_keeps_wire_format_when_mic_rate_changes) ... ok
+test_switch_desktop_stops_camera (test_combined.CombinedTests.test_switch_desktop_stops_camera) ... ok
+test_unclaimed_pairing_is_renewed (test_combined.CombinedTests.test_unclaimed_pairing_is_renewed) ... ok
+
+----------------------------------------------------------------------
+Ran 27 tests in 2.243s
+
+OK

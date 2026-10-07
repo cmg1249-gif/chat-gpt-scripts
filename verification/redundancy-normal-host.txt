@@ -1,0 +1,3 @@
+PASS normal packaged host: Cloudflare; authenticated, capture and shell remain off
+PASS normal packaged host: Pinggy encrypted relay; authenticated, capture and shell remain off
+PASS normal host closes both providers on scheduled shutdown

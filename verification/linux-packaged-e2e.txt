@@ -1,0 +1,10 @@
+PASS verified TLS and listener-owned pairing; wrong code rejected
+PASS: 12 frames (640x360)
+23:47:56  Camera turned OFF.
+PASS: 12 frames (640x360)
+PASS: 48000 Hz stereo, RMS 1060.2, tone 997 Hz
+23:47:58  Listener opened the interactive shell.
+PASS interactive shell through authenticated browser gateway
+23:47:58  Listener closed the interactive shell.
+PASS disconnect closes shell and all capture
+PASS wrong TLS certificate rejected

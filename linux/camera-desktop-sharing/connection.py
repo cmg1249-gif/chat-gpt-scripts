@@ -14,6 +14,7 @@ import urllib.request
 from discovery import discovery_key, signature
 from retry import retry_delay
 from tls import HTTPS_CONTEXT
+from control_protocol import tunnel_url
 
 APP = 'roomcam-desktop-v2'
 
@@ -26,7 +27,7 @@ def decode_advertisement(message, password, session=None):
         if session and data['session'] != session:
             return None
         url = data.get('url', '')
-        if not re.fullmatch(r'https://[a-z0-9-]+\.trycloudflare\.com', url):
+        if not tunnel_url(url):
             return None
         if not data.get('paired'):
             token = data.get('token')
@@ -52,6 +53,10 @@ class Tunnel:
         self.status = 'Connecting'
 
     def open(self):
+        self.url = None
+        candidate = None
+        registered = False
+        recent = []
         binary = Path(getattr(sys, '_MEIPASS', Path(__file__).parent)) / 'cloudflared'
         self.process = subprocess.Popen(
             [str(binary), 'tunnel', '--url', f'http://127.0.0.1:{self.port}', '--no-autoupdate'],
@@ -68,17 +73,26 @@ class Tunnel:
         threading.Thread(target=drain, daemon=True).start()
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline and not self.stop.is_set():
-            if process.poll() is not None:
-                raise ConnectionError('Tunnel exited during startup')
             try:
                 line = messages.get(timeout=.2)
             except queue.Empty:
+                if process.poll() is not None:
+                    raise ConnectionError('Tunnel exited during startup: ' + (' | '.join(recent[-4:]) or 'no diagnostic output'))
+                continue
+            recent.append(line.strip())
+            recent = recent[-8:]
+            if 'ERR' in line or 'error=' in line:
+                self.log('Cloudflare: ' + line.strip())
                 continue
             match = re.search(r'https://[a-z0-9-]+\.trycloudflare\.com', line)
-            if match:
-                self.url = match.group(0)
+            if match and tunnel_url(match.group(0)):
+                candidate = match.group(0)
+            if 'Registered tunnel connection' in line:
+                registered = True
+            if candidate and registered:
+                self.url = candidate
                 return self.url
-        raise TimeoutError('Tunnel startup timed out')
+        raise TimeoutError('Tunnel did not connect within 60 seconds: ' + ' | '.join(recent[-4:]))
 
     def publish(self):
         if self.advertisement:
@@ -91,8 +105,10 @@ class Tunnel:
         with urllib.request.urlopen(request, timeout=10, context=HTTPS_CONTEXT) as response:
             if response.status != 200:
                 raise ConnectionError(f'Discovery returned {response.status}')
+            return json.loads(response.read(8192))
 
     def close_process(self):
+        self.url = None
         process, self.process = self.process, None
         if process and process.poll() is None:
             process.terminate()
@@ -117,13 +133,13 @@ class Tunnel:
                         try:
                             self.publish()
                             self.status = 'Ready for viewer'
-                            next_publish = time.monotonic() + 600
+                            next_publish = time.monotonic() + 30
                         except (OSError, ValueError) as exc:
                             self.status = 'Discovery retrying'
                             self.log(f'Discovery unavailable: {exc}')
                             next_publish = time.monotonic() + retry_delay(exc, default=20)
                     self.stop.wait(2)
-            except (OSError, ValueError) as exc:
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
                 self.status = 'Connection retrying'
                 self.log(f'Connection unavailable: {exc}')
             finally:

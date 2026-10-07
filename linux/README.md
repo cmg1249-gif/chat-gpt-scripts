@@ -1,3 +1,5 @@
+> **Current release: [v3.0.1 Control Center](https://github.com/cmg1249-gif/chat-gpt-scripts/releases/tag/v3.0.1).** Use the matching new host and listener. Follow the [current setup instructions](../CONTROL-CENTER.md) for browser controls, pairing, terminal access, and connection fallbacks. The v2 instructions below describe the older release/legacy interface.
+
 # Linux downloads (Arch Linux x86_64)
 
 The v2.0.2 release includes **RoomCam_v2.0.2_linux_x86_64.tar.gz**. Extract it to get one `linux/` folder containing:
