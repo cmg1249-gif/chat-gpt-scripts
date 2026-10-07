@@ -32,7 +32,7 @@ with tempfile.TemporaryDirectory(prefix='roomcam-routes-') as directory:
         for base, context, route in routes:
             remote = Remote(base, context, route, data['code'], 'disposable-routes-check')
             status = remote.pair()
-            assert status['version'] == '3.0.1-preview'
+            assert status['version'] == '3.0.2-preview'
             capture = remote.json('/status')
             assert not capture['active'] and not capture['mic'] and not capture['desktop_audio']
             assert not status['terminal']

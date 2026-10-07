@@ -1,0 +1,107 @@
+test_pair_then_status_and_shell_is_initially_closed (test_control.HostTests.test_pair_then_status_and_shell_is_initially_closed) ... ok
+
+test_signed_identity_contains_no_pairing_secret (test_control.HostTests.test_signed_identity_contains_no_pairing_secret) ... ok
+
+test_terminal_rejects_cross_origin_and_missing_control_header (test_control.HostTests.test_terminal_rejects_cross_origin_and_missing_control_header) ... ok
+
+test_unpaired_public_request_cannot_claim_shell (test_control.HostTests.test_unpaired_public_request_cannot_claim_shell) ... ok
+
+test_auto_falls_back_to_internet (test_control.ListenerTests.test_auto_falls_back_to_internet) ... ok
+
+test_bad_code_returns_useful_error (test_control.ListenerTests.test_bad_code_returns_useful_error) ... ok
+
+test_blocked_lan_discovery_still_tries_internet (test_control.ListenerTests.test_blocked_lan_discovery_still_tries_internet) ... ok
+
+test_bootstrap_secret_single_use (test_control.ListenerTests.test_bootstrap_secret_single_use) ... ok
+
+test_connection_details_bypass_discovery_service (test_control.ListenerTests.test_connection_details_bypass_discovery_service) ... ok
+
+test_csrf_origin_and_dns_rebinding_rejected (test_control.ListenerTests.test_csrf_origin_and_dns_rebinding_rejected) ... ok
+
+test_failed_primary_uses_independent_relay (test_control.ListenerTests.test_failed_primary_uses_independent_relay) ... ok
+
+test_incompatible_host_reports_version (test_control.ListenerTests.test_incompatible_host_reports_version) ... ok
+
+test_local_success_does_not_require_internet_discovery (test_control.ListenerTests.test_local_success_does_not_require_internet_discovery) ... ok
+
+test_no_auth_cannot_connect_or_read_or_open_shell (test_control.ListenerTests.test_no_auth_cannot_connect_or_read_or_open_shell) ... ok
+
+test_proxy_restricts_endpoints_and_disconnect_stops_host (test_control.ListenerTests.test_proxy_restricts_endpoints_and_disconnect_stops_host) ... ok
+
+test_read_recovers_but_shell_input_is_never_replayed (test_control.ListenerTests.test_read_recovers_but_shell_input_is_never_replayed) ... ok
+
+test_recovery_keeps_code_password_and_respects_disconnect (test_control.ListenerTests.test_recovery_keeps_code_password_and_respects_disconnect) ... ok
+
+test_certificate_context_trusts_only_session_certificate (test_control.ProtocolTests.test_certificate_context_trusts_only_session_certificate) ... ok
+
+test_connection_details_expiry_and_tampering (test_control.ProtocolTests.test_connection_details_expiry_and_tampering) ... ok
+
+test_discovery_requires_code_freshness_and_challenge (test_control.ProtocolTests.test_discovery_requires_code_freshness_and_challenge) ... ok
+
+test_failure_preserves_diagnostic_and_clears_old_url (test_control.ProtocolTests.test_failure_preserves_diagnostic_and_clears_old_url) ... ok
+
+test_generic_and_api_addresses_rejected (test_control.ProtocolTests.test_generic_and_api_addresses_rejected) ... ok
+
+test_pairing_code_has_128_bits_and_normalizes (test_control.ProtocolTests.test_pairing_code_has_128_bits_and_normalizes) ... ok
+
+test_ready_requires_registered_connection (test_control.ProtocolTests.test_ready_requires_registered_connection) ... ok
+
+test_relay_whitelist_and_signed_certificate (test_control.ProtocolTests.test_relay_whitelist_and_signed_certificate) ... ok
+
+test_dns_handshake_retry_does_not_repeat_pair_post (test_control.RetryTests.test_dns_handshake_retry_does_not_repeat_pair_post) ... ok
+
+test_provider_failure_does_not_stop_other_provider (test_control.RetryTests.test_provider_failure_does_not_stop_other_provider) ... ok
+
+test_rejected_password_and_certificate_are_not_retried (test_control.RetryTests.test_rejected_password_and_certificate_are_not_retried) ... ok
+
+test_real_shell_output_state_and_cleanup (test_control.ShellTests.test_real_shell_output_state_and_cleanup) ... ok
+
+test_terminal_limits_and_not_started_input (test_control.ShellTests.test_terminal_limits_and_not_started_input) ... ok
+
+test_private_package_requires_creation_and_authentication (test_profiles.ProfileRoutesTests.test_private_package_requires_creation_and_authentication) ... ok
+
+test_profile_endpoints_require_browser_auth_and_csrf (test_profiles.ProfileRoutesTests.test_profile_endpoints_require_browser_auth_and_csrf) ... ok
+
+test_viewer_can_connect_using_saved_computer_only (test_profiles.ProfileRoutesTests.test_viewer_can_connect_using_saved_computer_only) ... ok
+
+test_download_checksum_mismatch_is_rejected (test_profiles.ProfileTests.test_download_checksum_mismatch_is_rejected) ... ok
+
+test_each_computer_gets_independent_identity (test_profiles.ProfileTests.test_each_computer_gets_independent_identity) ... ok
+
+test_host_loads_only_its_adjacent_settings (test_profiles.ProfileTests.test_host_loads_only_its_adjacent_settings) ... ok
+
+test_package_includes_private_settings_and_executable_permissions (test_profiles.ProfileTests.test_package_includes_private_settings_and_executable_permissions) ... ok
+
+test_prepared_host_loads_credentials_without_a_new_pairing_code (test_profiles.ProfileTests.test_prepared_host_loads_credentials_without_a_new_pairing_code) ... ok
+
+test_rejects_invalid_settings_and_path_traversal (test_profiles.ProfileTests.test_rejects_invalid_settings_and_path_traversal) ... ok
+
+test_saved_identity_survives_viewer_restart_and_public_list_has_no_secrets (test_profiles.ProfileTests.test_saved_identity_survives_viewer_restart_and_public_list_has_no_secrets) ... ok
+
+
+----------------------------------------------------------------------
+
+Ran 40 tests in 1.922s
+
+
+OK
+
+PASS verified TLS and listener-owned pairing; wrong code rejected
+
+PASS: 12 frames (640x360)
+
+01:34:35  Camera turned OFF.
+
+PASS: 12 frames (640x360)
+
+PASS: 48000 Hz stereo, RMS 1054.9, tone 997 Hz
+
+01:34:38  Listener opened the interactive shell.
+
+PASS interactive shell through authenticated browser gateway
+
+01:34:39  Listener closed the interactive shell.
+
+PASS disconnect closes shell and all capture
+
+PASS wrong TLS certificate rejected

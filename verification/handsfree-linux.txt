@@ -1,0 +1,7 @@
+PASS packaged viewer creates and downloads private host package
+
+PASS linux: saved-computer-only LAN connection, shell, capture off, disconnect
+
+PASS prepared package: saved-computer-only internet connection via Pinggy encrypted relay
+
+PASS linux: saved-computer-only LAN connection, shell, capture off, disconnect after BOTH applications restart

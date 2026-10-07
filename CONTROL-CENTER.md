@@ -1,18 +1,20 @@
-# RoomCam Control Center — 3.0.1 preview
+# RoomCam Control Center — 3.0.2 preview
 
 A browser dashboard for Windows and Linux sharing hosts, with live camera/desktop viewing, microphone and speaker controls, connection diagnostics, and an interactive PowerShell or Bash terminal.
 
 ## Start
 
-1. On the sharing computer, open **webcam_server.exe** (Windows) or **webcam_server.elf** (Linux). It opens a status window with a generated pairing code. There are no host settings to fill out.
-2. On the viewing computer, open **viewer.exe** or **viewer.elf**. Keep the listener running; it opens the control center in your browser.
-3. Paste the host's code into the dashboard and choose a session password. Click **Connect to host**. Everything is set from the listener.
+1. On the viewing computer, extract the matching release bundle and open **viewer.exe** (Windows) or **viewer.elf** (Linux). Keep the viewer running; it opens the control center in your browser.
+2. Enter a computer name, choose the sharing computer's operating system, and click **Create host package**. A password is generated automatically unless you choose one. The viewer saves the connection privately.
+3. Transfer that private ZIP to the sharing computer, extract it, and run **webcam_server.exe** or **webcam_server.elf**. Keep `roomcam-host.json` beside it. Nothing needs to be entered, selected, or copied back from the host. In the viewer, select its saved name and click **Connect to computer**.
 4. Choose a source and click **Start viewing**. Audio controls are independent. **Terminal → Open terminal** opens a persistent interactive shell on the host.
 5. **Disconnect** stops video, microphone, speaker capture, and the shell. Closing the sharing window also stops the host. Close the listener with Ctrl+C to disconnect and exit.
 
-The host's code and password are session-only. Restarting the host creates a new code and allows a new password. Reconnecting to the same host session requires the same code and password. Closing a browser tab alone does not stop sharing; use Disconnect or close the host. A shell closes after 15 minutes without keyboard input.
+The saved connection survives restarting both applications. Create a separate private package for each sharing computer; do not publish these packages. The public release downloads contain no pre-shared credentials. The generic public host executable alone is not pre-paired: create its package in the viewer first. A standalone viewer downloads a missing host executable from the matching release and verifies its SHA-256 checksum; the same-platform bundle already includes it.
 
-Use the matching **3.0.1 preview** host and listener together. This pairing protocol is intentionally different from the old public first-claim protocol. The new listener cannot pair with v2.x hosts. The old camera/desktop viewer remains available from source or packaged viewer with `--legacy`; the old host mode has no browser shell.
+Closing a browser tab alone does not stop sharing; use Disconnect or close the host. A shell closes after 15 minutes without keyboard input. Saved viewer settings live in `%LOCALAPPDATA%/RoomCam/listener` on Windows and `~/.local/share/RoomCam/listener` on Linux. Keep that directory private and back it up if you need to move your viewer.
+
+Use the matching **3.0.2 preview** host and viewer together. Older hosts must be replaced with a new viewer-created package. The old camera/desktop viewer remains available with `--legacy`; the old host mode has no browser shell.
 
 ## Same or different networks
 
@@ -21,14 +23,14 @@ Use the matching **3.0.1 preview** host and listener together. This pairing prot
 - Cloudflare uses bundled cloudflared and its automatic QUIC/HTTP2 transport fallback over UDP/TCP **7844**. The independent Pinggy route uses the operating system's **OpenSSH client** (`ssh` and `ssh-keygen`) over TCP **443**. Pinggy forwards TLS without decrypting it; the listener pins the host's signed session certificate. SSH on port 443 is still SSH, so networks restricting traffic to browser HTTPS may block it. If OpenSSH is unavailable, Cloudflare and LAN remain usable.
 - The browser only connects to the listener's loopback address. The listener verifies the host certificate for local connections; no browser certificate exception is needed.
 - Read-only requests can switch to another authenticated route when the current route fails. The dashboard displays the new route. Interrupted video/audio streams may need Start viewing or Listen again. Commands are never replayed automatically after an error because they may already have executed. Transient initial DNS and gateway failures receive bounded retries.
-- Discovery normally uses `ntfy.sh`. If it is unavailable, click **Copy fallback connection details** in the host window and paste into the listener's host-code field within two minutes. The signed details include active endpoints and bypass the discovery service. They contain the pairing code; share them only with your intended listener. This requires no host configuration.
+- Internet discovery uses `ntfy.sh` automatically, using the identity already stored in the private package. No host code or fallback details need to be copied. If this discovery service is blocked, internet discovery can fail even if a relay is available; local discovery/direct LAN can still work. Both relay providers currently share this discovery dependency.
 - Pinggy free tunnels expire after 60 minutes. The app detects process exit, reconnects, and advertises a new URL. This can interrupt streams. Free relay services do not provide a guarantee of availability; normal internet access alone cannot guarantee either tunnel service is allowed.
 
 ## Shell and authentication
 
 The shell runs as the user who launched the sharing app. It does not elevate privileges or install persistence. The host shows when a shell is active and closes the shell during normal shutdown; programs deliberately detached from that shell may outlive it. Shell history is not saved to the user's usual history file.
 
-Initial discovery is signed with a random 128-bit host code. The code and pairing token are not published to ntfy. Possessing the code allows the listener to set the session password. Keep the code with the people authorized to control that host.
+Each private host package includes a random 128-bit discovery identity and a password that the viewer also stores. The host starts already paired and rejects attempts to claim it with a new password. Discovery is signed; secrets are not published to ntfy. The settings file and private ZIP grant access to that computer, so share them only with its authorized operator.
 
 The local browser gateway uses a one-use launch token, an HttpOnly SameSite cookie, an explicit control token for changes, an exact loopback Host check, an Origin check, and a limited set of proxy endpoints. The terminal has bounded output retention and an idle timeout. Anyone with the code/password can operate the host with the sharing user's permissions.
 
@@ -36,7 +38,7 @@ The local browser gateway uses a one-use launch token, an HttpOnly SameSite cook
 
 The Linux build targets x86_64 Linux (Ubuntu 24.04/WSL2 test environment; glibc 2.39 baseline). Desktop capture still requires **X11**, not native Wayland. System audio requires PulseAudio or PipeWire-Pulse and `pactl` / `parec`; these device/session requirements are separate from connection settings. The terminal and listener do not require desktop capture to be enabled.
 
-If a graphical host window is unavailable, run `./webcam_server.elf --headless` to show the generated code in the terminal. No host configuration file is required.
+Extract the private ZIP with an archive manager that preserves executable permissions (for example `unzip`). If a graphical host window is unavailable, `./webcam_server.elf --headless` uses the same prepared settings and prints status. No editing of configuration files is needed.
 
 ## Diagnostics and builds
 
@@ -49,7 +51,7 @@ Build using `camera-desktop-sharing/build.ps1` or `linux/camera-desktop-sharing/
 Run the suites as separate processes:
 
 ```text
-python -m unittest -v test_control
+python -m unittest -v test_control test_profiles
 python -m unittest -v test_combined test_cursor   # Windows
 python -m unittest -v test_combined test_linux    # Linux
 python check_control_center.py
@@ -57,4 +59,4 @@ python check_control_center.py --internet
 python check_control_center.py --relay
 ```
 
-See **verification/REDUNDANCY.md** for this update and **verification/RESULTS.md** for the original preview tests and remaining limits. Do not use the old v2.0.2 checksums to verify these preview binaries.
+See **verification/HANDS-FREE.md** for this update, **verification/REDUNDANCY.md** for the previous transport tests, and **verification/RESULTS.md** for the original preview tests and remaining limits. Use the checksums from the matching release.

@@ -9,16 +9,18 @@ import secrets
 import ssl
 import sys
 import threading
+import tempfile
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
 
-from flask import Flask, Response, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory, send_file
 from werkzeug.serving import make_server
 from control_protocol import APP, direct_candidate, find_lan, normalize_code, topic_for, tunnel_url, verified, internet_candidate, parse_connection_details
 from tls import HTTPS_CONTEXT
+from control_profiles import VERSION, ProfileStore, data_directory, host_binary, write_host_package
 
 
 class Remote:
@@ -108,7 +110,7 @@ def _internet_snapshot(code):
 
 
 class Listener:
-    def __init__(self):
+    def __init__(self, profile_directory=None):
         self.app = Flask(__name__)
         self.app.config['MAX_CONTENT_LENGTH'] = 16384
         self.launch_token = secrets.token_urlsafe(32)
@@ -120,6 +122,10 @@ class Listener:
         self.connect_lock = threading.Lock()
         self.origin = ''
         self.activity = time.monotonic()
+        self.profiles = ProfileStore(profile_directory)
+        self.package_lock = threading.Lock()
+        self.packages = {}
+        self.package_directory = tempfile.TemporaryDirectory(prefix='roomcam-host-packages-')
         self.install_routes()
 
     def recover(self, previous):
@@ -142,7 +148,7 @@ class Listener:
                 replacement = Remote(base, context, route, previous.code, previous.password)
                 try:
                     status = replacement.pair()
-                    if status.get('version') != '3.0.1-preview':
+                    if status.get('version') != VERSION:
                         continue
                 except (OSError, ValueError, KeyError):
                     continue
@@ -208,9 +214,13 @@ class Listener:
                 data = request.get_json(silent=True)
                 if not isinstance(data, dict):
                     raise ValueError('Expected connection settings.')
-                raw_code = data.get('code', '')
-                code, supplied = parse_connection_details(raw_code.strip() if isinstance(raw_code, str) else raw_code)
-                password = data.get('password', '')
+                if data.get('profile'):
+                    profile = self.profiles.get(data['profile'])
+                    code, password, supplied = profile['code'], profile['password'], []
+                else:
+                    raw_code = data.get('code', '')
+                    code, supplied = parse_connection_details(raw_code.strip() if isinstance(raw_code, str) else raw_code)
+                    password = data.get('password', '')
                 if not isinstance(password, str) or not 8 <= len(password) <= 128:
                     raise ValueError('Choose a password with 8–128 characters.')
                 mode = data.get('mode', 'auto')
@@ -242,7 +252,7 @@ class Listener:
                         try:
                             remote = Remote(base, context, route, code, password)
                             status = remote.pair()
-                            if status.get('version') != '3.0.1-preview':
+                            if status.get('version') != VERSION:
                                 raise ValueError('Incompatible host. Install the matching control-center host and listener.')
                             self.remote = remote
                             self.candidates = list(candidates)
@@ -258,12 +268,51 @@ class Listener:
                         except (OSError, ValueError, KeyError) as exc:
                             errors.append(route + ': ' + str(exc))
                     candidates = []
-                return jsonify(error='Could not connect. Check the host code and that the sharing app is open. ' + ' '.join(errors[-3:]),
-                               hint='LAN uses port 2220. Internet routes use Cloudflare or Pinggy. If discovery fails, copy fallback connection details from the host and paste into the code field.'), 503
+                return jsonify(error='Could not connect. Make sure the prepared host package is running. ' + ' '.join(errors[-3:]),
+                               hint='LAN uses port 2220. Internet routes use Cloudflare or Pinggy. The host needs no code or password entry.'), 503
             except (ValueError, OSError) as exc:
                 return jsonify(error=str(exc)), 400
             finally:
                 self.connect_lock.release()
+
+        @app.get('/profiles')
+        def profiles():
+            return jsonify(computers=self.profiles.list_public())
+
+        @app.post('/profiles')
+        def create_profile():
+            try:
+                body = request.get_json(silent=True) or {}
+                if not isinstance(body, dict):
+                    raise ValueError('Expected computer settings.')
+                profile = self.profiles.create(body.get('name'), body.get('platform'), body.get('password', ''))
+                return jsonify(**{key: profile[key] for key in ('id', 'name', 'platform')})
+            except (OSError, ValueError) as exc:
+                return jsonify(error=str(exc)), 400
+
+        @app.post('/profiles/<profile_id>/package')
+        def prepare_package(profile_id):
+            if not self.package_lock.acquire(blocking=False):
+                return jsonify(error='A host package is already being prepared.'), 409
+            try:
+                profile = self.profiles.get(profile_id)
+                cache = (self.profiles.directory or Path(self.package_directory.name)) / 'host-cache'
+                binary = host_binary(profile['platform'], cache)
+                destination = Path(self.package_directory.name) / (profile_id + '.zip')
+                write_host_package(profile, binary, destination)
+                self.packages[profile_id] = destination
+                return jsonify(download='/profiles/' + profile_id + '/package', filename='RoomCam-host-' + profile['platform'] + '.zip')
+            except (OSError, ValueError) as exc:
+                return jsonify(error='Could not prepare the host package: ' + str(exc)), 400
+            finally:
+                self.package_lock.release()
+
+        @app.get('/profiles/<profile_id>/package')
+        def download_package(profile_id):
+            path = self.packages.get(profile_id)
+            if path is None or not path.is_file():
+                return jsonify(error='Prepare this computer’s host package first.'), 404
+            return send_file(path, as_attachment=True, download_name='RoomCam-host.zip', mimetype='application/zip')
 
         @app.get('/connection')
         def connection_status():
@@ -339,8 +388,9 @@ def run():
     parser = argparse.ArgumentParser(description='RoomCam browser control center')
     parser.add_argument('--no-browser', action='store_true', help='Print the local dashboard link')
     parser.add_argument('--session-file', help=argparse.SUPPRESS)
+    parser.add_argument('--data-dir', help=argparse.SUPPRESS)
     args = parser.parse_args()
-    listener = Listener()
+    listener = Listener(args.data_dir or data_directory())
     web = make_server('127.0.0.1', 0, listener.app, threaded=True)
     listener.origin = f'http://127.0.0.1:{web.server_port}'
     url = listener.origin + '/#launch=' + listener.launch_token
@@ -358,6 +408,7 @@ def run():
         if listener.remote:
             listener.remote.stop()
         web.server_close()
+        listener.package_directory.cleanup()
 
 
 if __name__ == '__main__':

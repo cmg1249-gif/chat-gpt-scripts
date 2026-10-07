@@ -17,14 +17,17 @@ from werkzeug.serving import make_server
 from connection import Tunnel
 from control_protocol import APP, PORT, Discovery, make_certificate, new_code, sign, topic_for, relay_url, connection_details
 from control_terminal import Terminal
+from control_profiles import VERSION, read_host_profile
 
-VERSION = '3.0.1-preview'
 
 
 class ControlHost:
-    def __init__(self, server):
+    def __init__(self, server, profile=None):
         self.server = server
-        self.code = new_code()
+        self.profile = profile
+        self.code = profile['code'] if profile else new_code()
+        if profile:
+            server.PASSWORD = profile['password']
         self.terminal = Terminal()
         self.certificate = ''
         self.port = PORT
@@ -126,7 +129,7 @@ def show_host(control, stop, headless=False):
     code = '-'.join(control.code[i:i+5] for i in range(0, len(control.code), 5))
     if headless:
         print('RoomCam sharing host ' + VERSION, flush=True)
-        print('Pairing code: ' + code, flush=True)
+        print('Prepared by your viewer; no host setup needed.' if control.profile else 'Pairing code: ' + code, flush=True)
         stop.wait()
         return
     try:
@@ -135,33 +138,27 @@ def show_host(control, stop, headless=False):
     except Exception:
         if sys.stdout is None:
             raise RuntimeError('Cannot show the host pairing code. A graphical desktop is required.')
-        print('RoomCam pairing code: ' + code, flush=True)
+        print('RoomCam: prepared by your viewer.' if control.profile else 'RoomCam pairing code: ' + code, flush=True)
         stop.wait()
         return
     root.title('RoomCam · Sharing host')
     root.geometry('680x450')
     root.configure(bg='#111827')
-    tk.Label(root, text='RoomCam is ready to pair', bg='#111827', fg='white', font=('Segoe UI', 20)).pack(pady=(25, 10))
-    tk.Label(root, text='Enter this code in the listener. Choose the password there.', bg='#111827', fg='#aebed0').pack()
-    entry = tk.Entry(root, justify='center', font=('Consolas', 17), width=36)
-    entry.insert(0, code)
-    entry.configure(state='readonly')
-    entry.pack(pady=15)
-    def copy():
-        root.clipboard_clear()
-        root.clipboard_append(code)
-    tk.Button(root, text='Copy pairing code', command=copy).pack()
-    def copy_details():
-        details = control.connection_details()
-        if details:
+    if control.profile:
+        tk.Label(root, text=control.profile['name'], bg='#111827', fg='white', font=('Segoe UI', 20)).pack(pady=(25, 10))
+        tk.Label(root, text='Ready for your viewer. No setup needed here.', bg='#111827', fg='#aebed0').pack(pady=15)
+        tk.Label(root, text='Camera, audio and terminal are controlled from your viewer.', bg='#111827', fg='#aebed0').pack(pady=15)
+    else:
+        tk.Label(root, text='RoomCam is ready to pair', bg='#111827', fg='white', font=('Segoe UI', 20)).pack(pady=(25, 10))
+        tk.Label(root, text='For hands-free setup, create a host package in your viewer.', bg='#111827', fg='#aebed0').pack()
+        entry = tk.Entry(root, justify='center', font=('Consolas', 17), width=36)
+        entry.insert(0, code)
+        entry.configure(state='readonly')
+        entry.pack(pady=15)
+        def copy():
             root.clipboard_clear()
-            root.clipboard_append(details)
-            detail_label.configure(text='Copied. Paste into the listener code field within two minutes.')
-        else:
-            detail_label.configure(text='Waiting for an internet route. LAN pairing still works.')
-    tk.Button(root, text='Copy fallback connection details', command=copy_details).pack(pady=(8, 0))
-    detail_label = tk.Label(root, text='Use if automatic internet discovery is unavailable.', bg='#111827', fg='#aebed0')
-    detail_label.pack()
+            root.clipboard_append(code)
+        tk.Button(root, text='Copy manual pairing code', command=copy).pack()
     label = tk.Label(root, text='', bg='#111827', fg='#8de8c1', wraplength=580)
     label.pack(pady=15)
     def close():
@@ -190,7 +187,9 @@ def run(server):
     parser.add_argument('--session-file', help=argparse.SUPPRESS)
     parser.add_argument('--stop-after', type=float, default=0, help=argparse.SUPPRESS)
     args = parser.parse_args()
-    control = ControlHost(server)
+    directory = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).parent
+    profile = read_host_profile(directory)
+    control = ControlHost(server, profile)
     stop = server.shutdown
     atexit.register(control.close)
     web = lan = relay_web = discovery = None

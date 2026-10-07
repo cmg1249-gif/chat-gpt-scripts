@@ -1,0 +1,9 @@
+PASS packaged viewer creates and downloads private host package
+
+PASS windows: saved-computer-only LAN connection, shell, capture off, disconnect
+
+PASS prepared package: saved-computer-only internet connection via Cloudflare
+
+PASS windows: saved-computer-only LAN connection, shell, capture off, disconnect after BOTH applications restart
+
+Browser fixture ready; no capture enabled

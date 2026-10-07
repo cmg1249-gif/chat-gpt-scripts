@@ -43,7 +43,7 @@ with tempfile.TemporaryDirectory(prefix='roomcam-exe-check-') as scratch:
         info = wait_file(host_info, host)
         remote = Remote(f'https://127.0.0.1:{info["port"]}', pinned_context(info['certificate']), 'Local package test', info['code'], 'disposable-package-test-password')
         health = remote.pair()
-        assert health['platform'] == platform_name and health['version'] == '3.0.1-preview'
+        assert health['platform'] == platform_name and health['version'] == '3.0.2-preview'
         remote.json('/terminal', 'POST')
         time.sleep(.5)
         if os.name == 'nt':
@@ -61,7 +61,7 @@ with tempfile.TemporaryDirectory(prefix='roomcam-exe-check-') as scratch:
         remote.stop()
         print(f'PASS actual {platform_name} host startup, encrypted pairing, shell and cleanup', flush=True)
 
-        listener = subprocess.Popen([str(platform_dir / ('dist/viewer' + suffix)), '--no-browser', '--session-file', str(listener_info)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **spawn_options)
+        listener = subprocess.Popen([str(platform_dir / ('dist/viewer' + suffix)), '--no-browser', '--session-file', str(listener_info), '--data-dir', str(scratch / 'profiles')], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **spawn_options)
         processes.append(listener)
         listener_data = wait_file(listener_info, listener)
         url, fragment = listener_data['url'].split('#', 1)
@@ -69,7 +69,9 @@ with tempfile.TemporaryDirectory(prefix='roomcam-exe-check-') as scratch:
         browser = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
         page = browser.open(url).read().decode()
         assert 'Control center' in page
-        for asset in ('control.js', 'control.css', 'xterm.js', 'xterm.css'):
+        assert 'Host code or fallback details' not in page and 'profile-form' in page
+        assert "data:text/css" not in browser.open(url + 'assets/control.css').read().decode()
+        for asset in ('control.js', 'control.css', 'xterm.js', 'xterm.css', 'favicon.svg'):
             assert browser.open(url + 'assets/' + asset).status == 200
         bootstrap = urllib.request.Request(url + 'bootstrap', data=json.dumps({'token': token}).encode(), headers={'Content-Type': 'application/json'}, method='POST')
         csrf = json.loads(browser.open(bootstrap).read())['csrf']

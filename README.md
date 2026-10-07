@@ -6,11 +6,11 @@ A collection of scripts and experimental projects built with ChatGPT.
 
 Learn binary, IPv4, subnetting, and the OSI model while reclaiming networks from an AI overlord. [Bitforge instructions and editable source](games/bitforge/) include **Version 1 Classic** and **Version 2 World Campaign**. [Download both versions](https://github.com/cmg1249-gif/chat-gpt-scripts/releases/tag/bitforge-v1-v2): download an HTML game, then open it in your browser. No Python, installation, or account is needed.
 
-## RoomCam Control Center — v3.0.1 preview
+## RoomCam Control Center — v3.0.2 preview
 
-[Download the Windows and Linux release](https://github.com/cmg1249-gif/chat-gpt-scripts/releases/tag/v3.0.1). The browser dashboard includes camera/desktop viewing, audio controls, and an authenticated PowerShell/Bash terminal on the sharing computer. LAN port 2220, Cloudflare, and an independent Pinggy TLS relay provide connection options.
+[Download the Windows and Linux release](https://github.com/cmg1249-gif/chat-gpt-scripts/releases/tag/v3.0.2). The browser dashboard includes camera/desktop viewing, audio controls, and an authenticated PowerShell/Bash terminal on the sharing computer. LAN port 2220, Cloudflare, and an independent Pinggy TLS relay provide connection options.
 
-**Update both the sharing host and listener.** Run `webcam_server` on the sharing computer and `viewer` on the viewing computer, then enter the host code and choose a session password in the browser. See [setup instructions](CONTROL-CENTER.md) and [verification and limits](verification/REDUNDANCY.md). v3 pairing is incompatible with v2 hosts.
+**Start with the viewer.** Create a private host package in its browser dashboard, extract that package on the sharing computer, and run `webcam_server`. Select the saved computer in the viewer and connect: no host code, password entry, or copying details back. See [setup instructions](CONTROL-CENTER.md) and [verification and limits](verification/HANDS-FREE.md). Replace older hosts with the new prepared package.
 
 ## Find your program
 
