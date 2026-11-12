@@ -118,6 +118,43 @@ class ListenerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.headers = {'X-RoomCam-CSRF': response.json['csrf']}
 
+    def test_empty_discovery_explains_routes_not_attempted(self):
+        self.login()
+        with patch('control_listener.find_lan', return_value=[]), patch('control_listener.find_internet', return_value=[]), patch('control_listener.Remote') as remote:
+            response = self.client.post('/connect', json=dict(code=protocol.new_code(), password='password'), headers=self.headers)
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(len(response.json['diagnostics']), 2)
+        self.assertIn('no matching host found', response.json['diagnostics'][0])
+        self.assertIn('could not be attempted', response.json['diagnostics'][1])
+        remote.assert_not_called()
+
+    def test_lan_only_explicitly_reports_no_fallback(self):
+        self.login()
+        with patch('control_listener.find_lan', return_value=[]), patch('control_listener.find_internet') as internet:
+            response = self.client.post('/connect', json=dict(code=protocol.new_code(), password='password', mode='lan'), headers=self.headers)
+        internet.assert_not_called()
+        self.assertEqual(response.json['mode'], 'lan')
+        self.assertIn('fallback was not attempted', response.json['hint'])
+
+    def test_all_failures_retained_without_untrusted_exception_secrets(self):
+        self.login()
+        routes = [('https://sample-host-test.trycloudflare.com', None, 'Cloudflare')] * 4
+        remote = Mock()
+        remote.pair.side_effect = urllib.error.URLError('https://user:secret@example.com/?token=private')
+        with patch('control_listener.find_lan', return_value=[]), patch('control_listener.find_internet', return_value=routes), patch('control_listener.Remote', return_value=remote):
+            response = self.client.post('/connect', json=dict(code=protocol.new_code(), password='password'), headers=self.headers)
+        self.assertEqual(len(response.json['diagnostics']), 5)
+        self.assertEqual(remote.pair.call_count, 4)
+        self.assertNotIn('secret', response.get_data(as_text=True))
+        self.assertNotIn('example.com', response.get_data(as_text=True))
+
+    def test_dns_and_timeout_classifications(self):
+        import socket
+        from control_listener import connection_error
+        self.assertEqual(connection_error(urllib.error.URLError(socket.gaierror(-2, 'private DNS text'))), 'DNS lookup failed.')
+        self.assertEqual(connection_error(TimeoutError('private hostname')), 'Connection timed out.')
+        self.assertIn('certificate verification failed', connection_error(ssl.SSLCertVerificationError('private cert details')))
+
     def test_no_auth_cannot_connect_or_read_or_open_shell(self):
         for path, method in (('/connect', 'POST'), ('/remote/terminal', 'POST'), ('/remote/status', 'GET')):
             self.assertEqual(self.client.open(path, method=method).status_code, 401)

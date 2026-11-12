@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import secrets
 import ssl
+import socket
 import sys
 import threading
 import tempfile
@@ -23,6 +24,35 @@ from control_owner import owner_public, owner_topic, sign_login, saved_owner_sec
 from control_owner_public import OWNER_PUBLIC_KEY
 from tls import HTTPS_CONTEXT
 from control_profiles import VERSION, ProfileStore, data_directory, host_binary, write_host_package
+
+
+def connection_error(exc):
+    """Classify failures without exposing URLs, credentials or proxy messages."""
+    reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+    if isinstance(reason, ssl.SSLCertVerificationError):
+        return 'TLS certificate verification failed. Check the host version and approved network trust configuration.'
+    if isinstance(reason, ssl.SSLError):
+        return 'TLS handshake failed.'
+    if isinstance(reason, socket.gaierror):
+        return 'DNS lookup failed.'
+    if isinstance(reason, TimeoutError):
+        return 'Connection timed out.'
+    if isinstance(reason, ConnectionRefusedError):
+        return 'Connection was refused.'
+    if isinstance(reason, FileNotFoundError):
+        return 'A required local file or executable is missing.'
+    # These are application-owned messages, not untrusted endpoint text.
+    known = (
+        'Incompatible host. Install the matching control-center host and listener.',
+        'Host does not accept your private connection password.',
+        'Host login belongs to a different destination.',
+        'Login host certificate does not match this connection.',
+    )
+    if isinstance(exc, ValueError) and str(exc) in known:
+        return str(exc)
+    if isinstance(exc, (ValueError, KeyError)):
+        return 'Invalid host response or connection settings.'
+    return 'Network connection failed.'
 
 
 class Remote:
@@ -283,12 +313,14 @@ class Listener:
                         try:
                             candidates.append(direct_candidate(data['address'].strip(), code, owner=owner) if owner else direct_candidate(data['address'].strip(), code))
                         except (OSError, ValueError) as exc:
-                            errors.append('Direct LAN: ' + str(exc))
+                            errors.append('Direct LAN: ' + connection_error(exc))
                     else:
                         try:
                             candidates.extend(find_lan(code, owner=owner) if owner else find_lan(code))
                         except OSError as exc:
-                            errors.append('LAN discovery: ' + str(exc))
+                            errors.append('LAN discovery: ' + connection_error(exc))
+                if mode != 'internet' and not candidates and not errors:
+                    errors.append('LAN discovery: no matching host found.')
                 # Prefer LAN, then discover internet only if needed.
                 for stage in ('lan', 'internet'):
                     if stage == 'internet':
@@ -296,8 +328,10 @@ class Listener:
                             break
                         try:
                             candidates = supplied or (find_internet(code, wait=15, owner=owner) if owner else find_internet(code, wait=15))
+                            if not candidates:
+                                errors.append('Internet discovery: no matching host advertised. Cloudflare/Pinggy could not be attempted.')
                         except (OSError, ValueError) as exc:
-                            errors.append('Internet discovery: ' + str(exc))
+                            errors.append('Internet discovery: ' + connection_error(exc) + ' Cloudflare/Pinggy could not be attempted.')
                             candidates = []
                     for base, context, route in candidates:
                         try:
@@ -312,16 +346,19 @@ class Listener:
                             return jsonify(connected=True, route=route, host=status['host'], platform=status['platform'], version=status['version'])
                         except urllib.error.HTTPError as exc:
                             if exc.code in (401, 403):
-                                errors.append('Viewer authorization was rejected. Use your private connection password.')
+                                errors.append(route + ': Viewer authorization was rejected. Use your private connection password.')
                             elif exc.code == 404:
-                                errors.append('Incompatible host: control-center endpoint missing. Update both applications.')
+                                errors.append(route + ': Incompatible host: control-center endpoint missing. Update both applications.')
                             else:
                                 errors.append(f'{route}: HTTP {exc.code}')
                         except (OSError, ValueError, KeyError) as exc:
-                            errors.append(route + ': ' + str(exc))
+                            errors.append(route + ': ' + connection_error(exc))
                     candidates = []
-                return jsonify(error='Could not connect. Make sure webcam_server is running. ' + ' '.join(errors[-3:]),
-                               hint='LAN uses port 2220. Internet routes use Cloudflare or Pinggy. The host needs no code or password entry.'), 503
+                hint = ('LAN-only mode: internet fallback was not attempted.' if mode == 'lan' else
+                        'Internet discovery uses ntfy.sh. Cloudflare requires host outbound UDP/TCP 7844; '
+                        'Pinggy requires SSH on TCP 443 (not ordinary HTTPS). A port 2220 hint does not diagnose an internet failure.')
+                return jsonify(error='Could not connect. Make sure webcam_server is running.\n' + '\n'.join(errors),
+                               diagnostics=errors, mode=mode, version=VERSION, hint=hint), 503
             except (ValueError, OSError) as exc:
                 return jsonify(error=str(exc)), 400
             finally:
